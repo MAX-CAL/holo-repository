@@ -17,6 +17,10 @@ export interface Subtopic {
   name: string;
   created_at: string;
   updated_at: string;
+  // Computed position for 3D rendering
+  position_x?: number;
+  position_y?: number;
+  position_z?: number;
 }
 
 export interface Entry {
@@ -28,4 +32,12 @@ export interface Entry {
   tags: string[];
   created_at: string;
   updated_at: string;
+}
+
+export type ViewLevel = 'root' | 'category' | 'editor';
+
+export interface NavigationState {
+  level: ViewLevel;
+  activeTopic: Topic | null;
+  activeSubtopic: Subtopic | null;
 }
