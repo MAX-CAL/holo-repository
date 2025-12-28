@@ -23,17 +23,11 @@ function InteractiveNode({ position, color, name, onClick, isHovered, onHover, i
   const baseSize = isSubtopic ? 0.1 : 0.12;
   const glowSize = isSubtopic ? 0.15 : 0.2;
   
-  useFrame((state) => {
+  useFrame(() => {
     if (meshRef.current && glowRef.current) {
-      const scale = isHovered ? 1.4 : 1;
+      const scale = isHovered ? 1.3 : 1;
       meshRef.current.scale.lerp(new THREE.Vector3(scale, scale, scale), 0.1);
       glowRef.current.scale.lerp(new THREE.Vector3(scale * 1.5, scale * 1.5, scale * 1.5), 0.1);
-      
-      // Pulse animation
-      const pulse = Math.sin(state.clock.elapsedTime * 2 + position[0]) * 0.08 + 1;
-      if (!isHovered) {
-        meshRef.current.scale.multiplyScalar(pulse);
-      }
     }
   });
 
@@ -143,16 +137,35 @@ interface AnimatedCameraProps {
 
 function AnimatedCamera({ targetPosition, targetLookAt }: AnimatedCameraProps) {
   const { camera } = useThree();
-  const currentPos = useRef(new THREE.Vector3(...targetPosition));
-  const currentLookAt = useRef(new THREE.Vector3(...targetLookAt));
+  const isAnimating = useRef(true);
+  const prevTarget = useRef({ position: targetPosition, lookAt: targetLookAt });
+
+  useEffect(() => {
+    // Only animate when target changes
+    if (
+      prevTarget.current.position[0] !== targetPosition[0] ||
+      prevTarget.current.position[1] !== targetPosition[1] ||
+      prevTarget.current.position[2] !== targetPosition[2]
+    ) {
+      isAnimating.current = true;
+      prevTarget.current = { position: targetPosition, lookAt: targetLookAt };
+    }
+  }, [targetPosition, targetLookAt]);
 
   useFrame(() => {
+    if (!isAnimating.current) return;
+
+    const target = new THREE.Vector3(...targetPosition);
+    const distance = camera.position.distanceTo(target);
+
+    if (distance < 0.1) {
+      isAnimating.current = false;
+      return;
+    }
+
     // Smooth interpolation to target position
-    currentPos.current.lerp(new THREE.Vector3(...targetPosition), 0.03);
-    currentLookAt.current.lerp(new THREE.Vector3(...targetLookAt), 0.03);
-    
-    camera.position.copy(currentPos.current);
-    camera.lookAt(currentLookAt.current);
+    camera.position.lerp(target, 0.05);
+    camera.lookAt(new THREE.Vector3(...targetLookAt));
   });
 
   return null;
