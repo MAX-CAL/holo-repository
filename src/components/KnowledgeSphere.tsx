@@ -1,9 +1,8 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
 import { Canvas, useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, Sphere, MeshDistortMaterial, Html } from '@react-three/drei';
-import { useSpring, animated } from '@react-spring/three';
 import * as THREE from 'three';
-import { Topic, Subtopic, ViewLevel } from '@/types/knowledge';
+import { Category, ViewLevel } from '@/types/knowledge';
 import { Starfield } from './Starfield';
 
 interface NodeProps {
@@ -13,15 +12,15 @@ interface NodeProps {
   onClick: () => void;
   isHovered: boolean;
   onHover: (hovered: boolean) => void;
-  isSubtopic?: boolean;
+  isSubcategory?: boolean;
 }
 
-function InteractiveNode({ position, color, name, onClick, isHovered, onHover, isSubtopic = false }: NodeProps) {
+function InteractiveNode({ position, color, name, onClick, isHovered, onHover, isSubcategory = false }: NodeProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const glowRef = useRef<THREE.Mesh>(null);
   
-  const baseSize = isSubtopic ? 0.1 : 0.12;
-  const glowSize = isSubtopic ? 0.15 : 0.2;
+  const baseSize = isSubcategory ? 0.1 : 0.12;
+  const glowSize = isSubcategory ? 0.15 : 0.2;
   
   useFrame(() => {
     if (meshRef.current && glowRef.current) {
@@ -41,7 +40,7 @@ function InteractiveNode({ position, color, name, onClick, isHovered, onHover, i
       {/* Outer glow */}
       <mesh ref={glowRef}>
         <sphereGeometry args={[glowSize, 16, 16]} />
-        <meshBasicMaterial color={color} transparent opacity={isSubtopic ? 0.1 : 0.15} />
+        <meshBasicMaterial color={color} transparent opacity={isSubcategory ? 0.1 : 0.15} />
       </mesh>
       
       {/* Main node */}
@@ -60,14 +59,6 @@ function InteractiveNode({ position, color, name, onClick, isHovered, onHover, i
           roughness={0.2}
         />
       </mesh>
-
-      {/* Connection line to sphere surface for subtopics */}
-      {isSubtopic && (
-        <mesh position={[0, 0, 0]}>
-          <cylinderGeometry args={[0.01, 0.01, 0.1, 8]} />
-          <meshBasicMaterial color={color} transparent opacity={0.3} />
-        </mesh>
-      )}
 
       {/* Label */}
       {isHovered && (
@@ -141,7 +132,6 @@ function AnimatedCamera({ targetPosition, targetLookAt }: AnimatedCameraProps) {
   const prevTarget = useRef({ position: targetPosition, lookAt: targetLookAt });
 
   useEffect(() => {
-    // Only animate when target changes
     if (
       prevTarget.current.position[0] !== targetPosition[0] ||
       prevTarget.current.position[1] !== targetPosition[1] ||
@@ -163,7 +153,6 @@ function AnimatedCamera({ targetPosition, targetLookAt }: AnimatedCameraProps) {
       return;
     }
 
-    // Smooth interpolation to target position
     camera.position.lerp(target, 0.05);
     camera.lookAt(new THREE.Vector3(...targetLookAt));
   });
@@ -172,32 +161,32 @@ function AnimatedCamera({ targetPosition, targetLookAt }: AnimatedCameraProps) {
 }
 
 interface SceneContentProps {
-  topics: Topic[];
-  subtopics: Subtopic[];
+  categories: Category[];
+  subcategories: Category[];
   level: ViewLevel;
-  activeTopic: Topic | null;
-  onTopicClick: (topic: Topic) => void;
-  onSubtopicClick: (subtopic: Subtopic) => void;
+  activeCategory: Category | null;
+  onCategoryClick: (category: Category) => void;
+  onSubcategoryClick: (subcategory: Category) => void;
+  controlsEnabled: boolean;
 }
 
 function SceneContent({ 
-  topics, 
-  subtopics, 
+  categories, 
+  subcategories, 
   level, 
-  activeTopic, 
-  onTopicClick, 
-  onSubtopicClick 
+  activeCategory, 
+  onCategoryClick, 
+  onSubcategoryClick,
+  controlsEnabled
 }: SceneContentProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   
-  // Calculate camera positions based on level
   const cameraConfig = useMemo(() => {
     if (level === 'root') {
       return { position: [0, 0, 6] as [number, number, number], lookAt: [0, 0, 0] as [number, number, number] };
-    } else if (level === 'category' && activeTopic) {
-      // Zoom into the topic position
-      const topicPos = new THREE.Vector3(activeTopic.position_x, activeTopic.position_y, activeTopic.position_z);
-      const direction = topicPos.clone().normalize();
+    } else if (level === 'category' && activeCategory) {
+      const catPos = new THREE.Vector3(activeCategory.position_x, activeCategory.position_y, activeCategory.position_z);
+      const direction = catPos.clone().normalize();
       const cameraPos = direction.multiplyScalar(3.5);
       return { 
         position: [cameraPos.x, cameraPos.y, cameraPos.z] as [number, number, number], 
@@ -205,26 +194,24 @@ function SceneContent({
       };
     }
     return { position: [0, 0, 6] as [number, number, number], lookAt: [0, 0, 0] as [number, number, number] };
-  }, [level, activeTopic]);
+  }, [level, activeCategory]);
 
-  // Generate positions for subtopics on sphere surface
-  const subtopicsWithPositions = useMemo(() => {
-    return subtopics.map((subtopic, index) => {
-      const theta = (index / subtopics.length) * Math.PI * 2;
-      const phi = Math.acos(2 * ((index + 0.5) / subtopics.length) - 1);
+  const subcategoriesWithPositions = useMemo(() => {
+    return subcategories.map((subcat, index) => {
+      const theta = (index / Math.max(subcategories.length, 1)) * Math.PI * 2;
+      const phi = Math.acos(2 * ((index + 0.5) / Math.max(subcategories.length, 1)) - 1);
       const radius = 2;
       
       return {
-        ...subtopic,
+        ...subcat,
         position_x: radius * Math.sin(phi) * Math.cos(theta),
         position_y: radius * Math.sin(phi) * Math.sin(theta),
         position_z: radius * Math.cos(phi)
       };
     });
-  }, [subtopics]);
+  }, [subcategories]);
 
-  // Animated sphere color based on active topic
-  const sphereColor = activeTopic ? activeTopic.color : "hsl(158, 64%, 20%)";
+  const sphereColor = activeCategory ? activeCategory.color : "hsl(158, 64%, 20%)";
 
   return (
     <>
@@ -235,60 +222,67 @@ function SceneContent({
       
       <Starfield count={800} />
       
-      {/* Central sphere */}
       <CentralSphere color={sphereColor} />
 
-      {/* Lighting */}
       <ambientLight intensity={0.3} />
       <pointLight position={[10, 10, 10]} intensity={1} color="hsl(158, 64%, 51%)" />
       <pointLight position={[-10, -10, -10]} intensity={0.5} color="hsl(172, 66%, 50%)" />
 
-      {/* Level 1: Topic nodes */}
-      {level === 'root' && topics.map(topic => (
+      {level === 'root' && categories.map(category => (
         <InteractiveNode
-          key={topic.id}
-          position={[topic.position_x, topic.position_y, topic.position_z]}
-          color={topic.color}
-          name={topic.name}
-          onClick={() => onTopicClick(topic)}
-          isHovered={hoveredId === topic.id}
-          onHover={(hovered) => setHoveredId(hovered ? topic.id : null)}
+          key={category.id}
+          position={[category.position_x, category.position_y, category.position_z]}
+          color={category.color}
+          name={category.name}
+          onClick={() => onCategoryClick(category)}
+          isHovered={hoveredId === category.id}
+          onHover={(hovered) => setHoveredId(hovered ? category.id : null)}
         />
       ))}
 
-      {/* Level 2: Subtopic nodes */}
-      {level === 'category' && subtopicsWithPositions.map(subtopic => (
+      {level === 'category' && subcategoriesWithPositions.map(subcat => (
         <InteractiveNode
-          key={subtopic.id}
-          position={[subtopic.position_x!, subtopic.position_y!, subtopic.position_z!]}
-          color={activeTopic?.color || '#22c55e'}
-          name={subtopic.name}
-          onClick={() => onSubtopicClick(subtopic)}
-          isHovered={hoveredId === subtopic.id}
-          onHover={(hovered) => setHoveredId(hovered ? subtopic.id : null)}
-          isSubtopic
+          key={subcat.id}
+          position={[subcat.position_x, subcat.position_y, subcat.position_z]}
+          color={activeCategory?.color || '#22c55e'}
+          name={subcat.name}
+          onClick={() => onSubcategoryClick(subcat)}
+          isHovered={hoveredId === subcat.id}
+          onHover={(hovered) => setHoveredId(hovered ? subcat.id : null)}
+          isSubcategory
         />
       ))}
+
+      <OrbitControls
+        enablePan={false}
+        minDistance={2.5}
+        maxDistance={12}
+        enableDamping
+        dampingFactor={0.05}
+        enabled={controlsEnabled}
+      />
     </>
   );
 }
 
 interface KnowledgeSphereProps {
-  topics: Topic[];
-  subtopics: Subtopic[];
+  categories: Category[];
+  subcategories: Category[];
   level: ViewLevel;
-  activeTopic: Topic | null;
-  onTopicClick: (topic: Topic) => void;
-  onSubtopicClick: (subtopic: Subtopic) => void;
+  activeCategory: Category | null;
+  onCategoryClick: (category: Category) => void;
+  onSubcategoryClick: (subcategory: Category) => void;
+  controlsEnabled?: boolean;
 }
 
 export function KnowledgeSphere({ 
-  topics, 
-  subtopics, 
+  categories, 
+  subcategories, 
   level, 
-  activeTopic, 
-  onTopicClick, 
-  onSubtopicClick 
+  activeCategory, 
+  onCategoryClick, 
+  onSubcategoryClick,
+  controlsEnabled = true
 }: KnowledgeSphereProps) {
   return (
     <div className="w-full h-full">
@@ -297,20 +291,13 @@ export function KnowledgeSphere({
         style={{ background: 'transparent' }}
       >
         <SceneContent
-          topics={topics}
-          subtopics={subtopics}
+          categories={categories}
+          subcategories={subcategories}
           level={level}
-          activeTopic={activeTopic}
-          onTopicClick={onTopicClick}
-          onSubtopicClick={onSubtopicClick}
-        />
-        <OrbitControls
-          enablePan={false}
-          minDistance={2.5}
-          maxDistance={12}
-          enableDamping
-          dampingFactor={0.05}
-          enabled={level !== 'editor'}
+          activeCategory={activeCategory}
+          onCategoryClick={onCategoryClick}
+          onSubcategoryClick={onSubcategoryClick}
+          controlsEnabled={controlsEnabled}
         />
       </Canvas>
     </div>

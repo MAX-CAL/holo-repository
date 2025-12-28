@@ -1,5 +1,5 @@
-import { ChevronRight } from 'lucide-react';
-import { NavigationState, Topic, Subtopic } from '@/types/knowledge';
+import { ChevronRight, Globe } from 'lucide-react';
+import { NavigationState } from '@/types/knowledge';
 
 interface BreadcrumbsProps {
   navigation: NavigationState;
@@ -8,49 +8,46 @@ interface BreadcrumbsProps {
 }
 
 export function Breadcrumbs({ navigation, onNavigateToRoot, onNavigateToCategory }: BreadcrumbsProps) {
-  const { level, activeTopic, activeSubtopic } = navigation;
+  const { level, activeCategory, activeSubcategory } = navigation;
 
   return (
-    <div className="flex items-center gap-1 text-sm">
+    <nav className="flex items-center gap-1 text-sm overflow-x-auto">
       <button
         onClick={onNavigateToRoot}
-        className={`px-2 py-1 rounded transition-colors ${
-          level === 'root'
-            ? 'text-foreground font-medium'
-            : 'text-muted-foreground hover:text-foreground'
-        }`}
+        className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors shrink-0"
       >
-        Universe
+        <Globe className="w-4 h-4" />
+        <span>Universe</span>
       </button>
 
-      {(level === 'category' || level === 'editor') && activeTopic && (
+      {activeCategory && (
         <>
-          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
           <button
             onClick={onNavigateToCategory}
-            className={`px-2 py-1 rounded transition-colors flex items-center gap-2 ${
-              level === 'category'
-                ? 'text-foreground font-medium'
-                : 'text-muted-foreground hover:text-foreground'
+            className={`truncate max-w-[120px] sm:max-w-[200px] flex items-center gap-2 ${
+              level === 'category' 
+                ? 'text-foreground font-medium' 
+                : 'text-muted-foreground hover:text-foreground transition-colors'
             }`}
           >
             <span
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: activeTopic.color }}
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: activeCategory.color }}
             />
-            {activeTopic.name}
+            {activeCategory.name}
           </button>
         </>
       )}
 
-      {level === 'editor' && activeSubtopic && (
+      {activeSubcategory && (
         <>
-          <ChevronRight className="w-4 h-4 text-muted-foreground" />
-          <span className="px-2 py-1 text-foreground font-medium">
-            {activeSubtopic.name}
+          <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+          <span className="text-foreground font-medium truncate max-w-[120px] sm:max-w-[200px]">
+            {activeSubcategory.name}
           </span>
         </>
       )}
-    </div>
+    </nav>
   );
 }

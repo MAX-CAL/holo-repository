@@ -1,14 +1,13 @@
 import { useState, useCallback } from 'react';
 import { KnowledgeSphere } from './KnowledgeSphere';
-import { AddTopicDialog } from './AddTopicDialog';
+import { AddCategoryDialog } from './AddCategoryDialog';
 import { TopicDetailView } from './TopicDetailView';
 import { Breadcrumbs } from './Breadcrumbs';
-import { useTopics } from '@/hooks/useTopics';
-import { useSubtopics } from '@/hooks/useSubtopics';
+import { useCategories } from '@/hooks/useCategories';
 import { useAuth } from '@/hooks/useAuth';
-import { Topic, Subtopic, NavigationState, ViewLevel } from '@/types/knowledge';
+import { Category, NavigationState, ViewLevel } from '@/types/knowledge';
 import { Button } from '@/components/ui/button';
-import { LogOut, Loader2, Brain, ArrowLeft, Plus } from 'lucide-react';
+import { LogOut, Loader2, Brain, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface UniverseViewProps {
@@ -16,32 +15,33 @@ interface UniverseViewProps {
 }
 
 export function UniverseView({ onLogout }: UniverseViewProps) {
-  const { topics, loading: topicsLoading, addTopic } = useTopics();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [overlayInteracting, setOverlayInteracting] = useState(false);
   
   // Navigation state machine
   const [navigation, setNavigation] = useState<NavigationState>({
     level: 'root',
-    activeTopic: null,
-    activeSubtopic: null
+    activeCategory: null,
+    activeSubcategory: null
   });
 
-  // Fetch subtopics for the active topic
-  const { subtopics, loading: subtopicsLoading, addSubtopic } = useSubtopics(
-    navigation.activeTopic?.id || ''
+  // Fetch main categories (parent_id is null)
+  const { categories, loading: categoriesLoading, addCategory: addMainCategory } = useCategories(
+    user?.id,
+    null
+  );
+
+  // Fetch subcategories for the active category
+  const { categories: subcategories, loading: subcategoriesLoading, addCategory: addSubcategory } = useCategories(
+    user?.id,
+    navigation.activeCategory?.id || null
   );
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
-    const { error } = await signOut();
-    
-    if (error) {
-      toast.error('Failed to sign out');
-      setIsLoggingOut(false);
-      return;
-    }
-
+    signOut();
+    toast.success('Logged out successfully');
     onLogout();
   };
 
@@ -49,8 +49,8 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
   const navigateToRoot = useCallback(() => {
     setNavigation({
       level: 'root',
-      activeTopic: null,
-      activeSubtopic: null
+      activeCategory: null,
+      activeSubcategory: null
     });
   }, []);
 
@@ -58,23 +58,23 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
     setNavigation(prev => ({
       ...prev,
       level: 'category',
-      activeSubtopic: null
+      activeSubcategory: null
     }));
   }, []);
 
-  const handleTopicClick = useCallback((topic: Topic) => {
+  const handleCategoryClick = useCallback((category: Category) => {
     setNavigation({
       level: 'category',
-      activeTopic: topic,
-      activeSubtopic: null
+      activeCategory: category,
+      activeSubcategory: null
     });
   }, []);
 
-  const handleSubtopicClick = useCallback((subtopic: Subtopic) => {
+  const handleSubcategoryClick = useCallback((subcategory: Category) => {
     setNavigation(prev => ({
       ...prev,
       level: 'editor',
-      activeSubtopic: subtopic
+      activeSubcategory: subcategory
     }));
   }, []);
 
@@ -82,28 +82,38 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
     setNavigation(prev => ({
       ...prev,
       level: 'category',
-      activeSubtopic: null
+      activeSubcategory: null
     }));
   }, []);
 
+  const handleAddCategory = async (name: string, color: string) => {
+    return addMainCategory(name, color, null);
+  };
+
+  const handleAddSubcategory = async (name: string, color: string) => {
+    return addSubcategory(name, color, navigation.activeCategory?.id || null);
+  };
+
   // Show editor overlay when at level 3
-  if (navigation.level === 'editor' && navigation.activeTopic && navigation.activeSubtopic) {
+  if (navigation.level === 'editor' && navigation.activeCategory && navigation.activeSubcategory && user) {
     return (
       <TopicDetailView 
-        topic={navigation.activeTopic} 
-        subtopic={navigation.activeSubtopic}
+        category={navigation.activeCategory} 
+        subcategory={navigation.activeSubcategory}
+        userId={user.id}
         onBack={handleBackFromEditor}
         navigation={navigation}
         onNavigateToRoot={navigateToRoot}
         onNavigateToCategory={navigateToCategory}
+        onOverlayInteraction={setOverlayInteracting}
       />
     );
   }
 
-  const isLoading = topicsLoading || (navigation.level === 'category' && subtopicsLoading);
+  const isLoading = categoriesLoading || (navigation.level === 'category' && subcategoriesLoading);
   const showEmptyState = !isLoading && (
-    (navigation.level === 'root' && topics.length === 0) ||
-    (navigation.level === 'category' && subtopics.length === 0)
+    (navigation.level === 'root' && categories.length === 0) ||
+    (navigation.level === 'category' && subcategories.length === 0)
   );
 
   return (
@@ -177,12 +187,13 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
           </div>
         ) : (
           <KnowledgeSphere 
-            topics={topics}
-            subtopics={subtopics}
+            categories={categories}
+            subcategories={subcategories}
             level={navigation.level}
-            activeTopic={navigation.activeTopic}
-            onTopicClick={handleTopicClick}
-            onSubtopicClick={handleSubtopicClick}
+            activeCategory={navigation.activeCategory}
+            onCategoryClick={handleCategoryClick}
+            onSubcategoryClick={handleSubcategoryClick}
+            controlsEnabled={!overlayInteracting}
           />
         )}
       </div>
@@ -194,12 +205,12 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
             {navigation.level === 'root' ? (
               <>
                 <p className="text-lg text-muted-foreground mb-2">Your universe is empty</p>
-                <p className="text-sm text-muted-foreground/70">Tap the + button to add your first topic</p>
+                <p className="text-sm text-muted-foreground/70">Tap the + button to add your first category</p>
               </>
             ) : (
               <>
-                <p className="text-lg text-muted-foreground mb-2">No sub-topics yet</p>
-                <p className="text-sm text-muted-foreground/70">Tap the + button to add a sub-topic</p>
+                <p className="text-lg text-muted-foreground mb-2">No sub-categories yet</p>
+                <p className="text-sm text-muted-foreground/70">Tap the + button to add a sub-category</p>
               </>
             )}
           </div>
@@ -212,89 +223,20 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
           <p className="text-xs text-muted-foreground/60 text-center">
             {navigation.level === 'root' 
               ? 'Drag to rotate • Scroll/pinch to zoom • Click nodes to explore'
-              : 'Click sub-topic nodes to open editor'}
+              : 'Click sub-category nodes to open editor'}
           </p>
         </div>
       )}
 
-      {/* Add topic/subtopic button */}
+      {/* Add category/subcategory button */}
       {navigation.level === 'root' ? (
-        <AddTopicDialog onAdd={addTopic} />
+        <AddCategoryDialog onAdd={handleAddCategory} />
       ) : (
-        <AddSubtopicButton onAdd={addSubtopic} />
+        <AddCategoryDialog 
+          onAdd={handleAddSubcategory} 
+          parentId={navigation.activeCategory?.id}
+        />
       )}
     </div>
-  );
-}
-
-interface AddSubtopicButtonProps {
-  onAdd: (name: string) => Promise<{ error?: Error | null }>;
-}
-
-function AddSubtopicButton({ onAdd }: AddSubtopicButtonProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [isAdding, setIsAdding] = useState(false);
-
-  const handleAdd = async () => {
-    if (!name.trim()) return;
-    
-    setIsAdding(true);
-    const { error } = await onAdd(name.trim());
-    setIsAdding(false);
-
-    if (error) {
-      toast.error('Failed to add sub-topic');
-      return;
-    }
-
-    toast.success('Sub-topic added!');
-    setName('');
-    setIsOpen(false);
-  };
-
-  return (
-    <>
-      <Button
-        size="lg"
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full shadow-lg bg-primary hover:bg-primary/90 z-20"
-        onClick={() => setIsOpen(true)}
-      >
-        <Plus className="w-6 h-6" />
-      </Button>
-
-      {isOpen && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-xl">
-            <h2 className="text-lg font-semibold text-foreground mb-4">Add Sub-topic</h2>
-            <input
-              type="text"
-              placeholder="Sub-topic name..."
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-              className="w-full px-4 py-3 bg-background/50 border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 mb-4"
-              autoFocus
-            />
-            <div className="flex gap-3">
-              <Button
-                variant="ghost"
-                onClick={() => setIsOpen(false)}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleAdd}
-                disabled={isAdding || !name.trim()}
-                className="flex-1 bg-primary hover:bg-primary/90"
-              >
-                {isAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
   );
 }

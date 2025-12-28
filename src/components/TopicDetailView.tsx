@@ -1,47 +1,71 @@
-import { useState } from 'react';
-import { Topic, Subtopic, Entry, NavigationState } from '@/types/knowledge';
+import { useState, useRef } from 'react';
+import { Category, Entry, NavigationState } from '@/types/knowledge';
 import { useEntries } from '@/hooks/useEntries';
 import { Breadcrumbs } from './Breadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ArrowLeft, Plus, FileText, X, Calendar, Tag, Loader2, Brain } from 'lucide-react';
+import { ArrowLeft, Plus, FileText, X, Calendar, Tag, Loader2, Brain, ImagePlus, Image } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
 interface TopicDetailViewProps {
-  topic: Topic;
-  subtopic: Subtopic;
+  category: Category;
+  subcategory: Category;
+  userId: string;
   onBack: () => void;
   navigation: NavigationState;
   onNavigateToRoot: () => void;
   onNavigateToCategory: () => void;
+  onOverlayInteraction: (interacting: boolean) => void;
 }
 
 export function TopicDetailView({ 
-  topic, 
-  subtopic, 
+  category, 
+  subcategory, 
+  userId,
   onBack,
   navigation,
   onNavigateToRoot,
-  onNavigateToCategory
+  onNavigateToCategory,
+  onOverlayInteraction
 }: TopicDetailViewProps) {
-  const { entries, loading, addEntry, deleteEntry } = useEntries(subtopic.id);
+  const { entries, loading, addEntry, deleteEntry } = useEntries(userId, subcategory.id);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [newEntry, setNewEntry] = useState({ title: '', content: '', tags: '' });
+  const [newEntry, setNewEntry] = useState({ title: '', content: '', tags: '', imageDescription: '' });
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleAddEntry = async () => {
-    if (!newEntry.title.trim()) {
-      toast.error('Please enter a title');
+    if (!newEntry.title.trim() && !selectedImage) {
+      toast.error('Please enter a title or add an image');
       return;
     }
 
     setIsAdding(true);
     const tags = newEntry.tags.split(',').map(t => t.trim()).filter(Boolean);
-    const { error } = await addEntry(newEntry.title.trim(), newEntry.content.trim(), tags);
+    const { error } = await addEntry(
+      newEntry.title.trim() || 'Untitled',
+      newEntry.content.trim(),
+      tags,
+      selectedImage || undefined,
+      newEntry.imageDescription.trim() || undefined
+    );
     setIsAdding(false);
 
     if (error) {
@@ -50,7 +74,9 @@ export function TopicDetailView({
     }
 
     toast.success('Entry added!');
-    setNewEntry({ title: '', content: '', tags: '' });
+    setNewEntry({ title: '', content: '', tags: '', imageDescription: '' });
+    setSelectedImage(null);
+    setImagePreview(null);
     setIsAddDialogOpen(false);
   };
 
@@ -63,8 +89,21 @@ export function TopicDetailView({
     toast.success('Entry deleted');
   };
 
+  const clearImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-background z-50 overflow-hidden">
+    <div 
+      className="fixed inset-0 bg-background z-50 overflow-hidden"
+      onMouseEnter={() => onOverlayInteraction(true)}
+      onMouseLeave={() => onOverlayInteraction(false)}
+      onTouchStart={() => onOverlayInteraction(true)}
+    >
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 h-16 flex items-center px-4 md:px-8 border-b border-border/50 bg-background/90 backdrop-blur-md z-10">
         <Button
@@ -92,15 +131,15 @@ export function TopicDetailView({
       {/* Content */}
       <div className="pt-16 h-full overflow-y-auto">
         <div className="max-w-6xl mx-auto p-4 md:p-6 lg:p-8">
-          {/* Subtopic header */}
+          {/* Subcategory header */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <div
                 className="w-4 h-4 rounded-full"
-                style={{ backgroundColor: topic.color }}
+                style={{ backgroundColor: category.color }}
               />
               <h1 className="text-xl md:text-2xl font-semibold text-foreground">
-                {subtopic.name}
+                {subcategory.name}
               </h1>
             </div>
             
@@ -111,7 +150,7 @@ export function TopicDetailView({
                   <span className="hidden sm:inline">Add Entry</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-card border-border">
+              <DialogContent className="bg-card border-border max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>New Entry</DialogTitle>
                 </DialogHeader>
@@ -122,11 +161,59 @@ export function TopicDetailView({
                     onChange={(e) => setNewEntry({ ...newEntry, title: e.target.value })}
                     className="bg-background/50 border-border"
                   />
+                  
+                  {/* Image upload */}
+                  <div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageSelect}
+                      className="hidden"
+                    />
+                    
+                    {imagePreview ? (
+                      <div className="relative">
+                        <img 
+                          src={imagePreview} 
+                          alt="Preview" 
+                          className="w-full h-48 object-cover rounded-lg border border-border/50"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute top-2 right-2 bg-background/80 hover:bg-background"
+                          onClick={clearImage}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        className="w-full h-24 border-dashed border-border/50 gap-2"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <ImagePlus className="w-5 h-5 text-muted-foreground" />
+                        <span className="text-muted-foreground">Add Photo</span>
+                      </Button>
+                    )}
+
+                    {imagePreview && (
+                      <Input
+                        placeholder="Photo description/credits (e.g., Architect: Zaha Hadid)"
+                        value={newEntry.imageDescription}
+                        onChange={(e) => setNewEntry({ ...newEntry, imageDescription: e.target.value })}
+                        className="mt-2 bg-background/50 border-border text-sm"
+                      />
+                    )}
+                  </div>
+
                   <Textarea
-                    placeholder="Content..."
+                    placeholder="Notes..."
                     value={newEntry.content}
                     onChange={(e) => setNewEntry({ ...newEntry, content: e.target.value })}
-                    className="bg-background/50 border-border min-h-[120px]"
+                    className="bg-background/50 border-border min-h-[100px]"
                   />
                   <Input
                     placeholder="Tags (comma separated)"
@@ -142,7 +229,7 @@ export function TopicDetailView({
             </Dialog>
           </div>
 
-          {/* Entries grid */}
+          {/* Masonry Grid */}
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -154,25 +241,48 @@ export function TopicDetailView({
               <p className="text-sm opacity-70">Add your first knowledge entry above!</p>
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4">
               {entries.map((entry) => (
-                <Card key={entry.id} className="bg-card/80 border-border/50 group relative overflow-hidden hover:border-primary/30 transition-colors">
+                <div 
+                  key={entry.id} 
+                  className="break-inside-avoid bg-card/80 border border-border/50 rounded-xl overflow-hidden group relative hover:border-primary/30 transition-colors"
+                >
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="absolute top-2 right-2 w-7 h-7 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                    className="absolute top-2 right-2 w-7 h-7 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-background/80"
                     onClick={() => handleDeleteEntry(entry.id)}
                   >
                     <X className="w-3.5 h-3.5 text-destructive" />
                   </Button>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base font-medium text-foreground line-clamp-2">
+
+                  {entry.image_url && (
+                    <div className="relative">
+                      <img 
+                        src={entry.image_url} 
+                        alt={entry.title}
+                        className="w-full object-cover"
+                        loading="lazy"
+                      />
+                      {entry.image_description && (
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background/90 to-transparent p-3">
+                          <p className="text-xs text-foreground/80 italic">
+                            {entry.image_description}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="p-4 space-y-3">
+                    <h3 className="font-medium text-foreground line-clamp-2">
                       {entry.title}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
+                    </h3>
+
                     {entry.content && (
-                      <p className="text-sm text-muted-foreground line-clamp-4">{entry.content}</p>
+                      <p className="text-sm text-muted-foreground line-clamp-4">
+                        {entry.content}
+                      </p>
                     )}
                     
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -193,8 +303,8 @@ export function TopicDetailView({
                         ))}
                       </div>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
           )}

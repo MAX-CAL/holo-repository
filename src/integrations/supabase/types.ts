@@ -14,88 +14,13 @@ export type Database = {
   }
   public: {
     Tables: {
-      entries: {
-        Row: {
-          content: string | null
-          created_at: string
-          id: string
-          subtopic_id: string
-          tags: string[] | null
-          title: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          content?: string | null
-          created_at?: string
-          id?: string
-          subtopic_id: string
-          tags?: string[] | null
-          title: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          content?: string | null
-          created_at?: string
-          id?: string
-          subtopic_id?: string
-          tags?: string[] | null
-          title?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "entries_subtopic_id_fkey"
-            columns: ["subtopic_id"]
-            isOneToOne: false
-            referencedRelation: "subtopics"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      subtopics: {
-        Row: {
-          created_at: string
-          id: string
-          name: string
-          topic_id: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          name: string
-          topic_id: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          name?: string
-          topic_id?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "subtopics_topic_id_fkey"
-            columns: ["topic_id"]
-            isOneToOne: false
-            referencedRelation: "topics"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      topics: {
+      categories: {
         Row: {
           color: string
           created_at: string
           id: string
           name: string
+          parent_id: string | null
           position_x: number
           position_y: number
           position_z: number
@@ -107,6 +32,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          parent_id?: string | null
           position_x?: number
           position_y?: number
           position_z?: number
@@ -118,11 +44,102 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          parent_id?: string | null
           position_x?: number
           position_y?: number
           position_z?: number
           updated_at?: string
           user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "categories_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      entries: {
+        Row: {
+          category_id: string
+          content: string | null
+          created_at: string
+          id: string
+          image_description: string | null
+          image_url: string | null
+          tags: string[] | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category_id: string
+          content?: string | null
+          created_at?: string
+          id?: string
+          image_description?: string | null
+          image_url?: string | null
+          tags?: string[] | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category_id?: string
+          content?: string | null
+          created_at?: string
+          id?: string
+          image_description?: string | null
+          image_url?: string | null
+          tags?: string[] | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entries_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "entries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      users: {
+        Row: {
+          access_code: string
+          created_at: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          access_code: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          access_code?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
         }
         Relationships: []
       }
