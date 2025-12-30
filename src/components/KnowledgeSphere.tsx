@@ -233,21 +233,21 @@ function SceneContent({
   isMobile
 }: SceneContentProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [cameraPosition, setCameraPosition] = useState<THREE.Vector3>(new THREE.Vector3(0, 0, 6));
+  const [cameraPosition, setCameraPosition] = useState<THREE.Vector3>(new THREE.Vector3(0, 0, 20));
   
   const cameraConfig = useMemo(() => {
     if (level === 'root') {
-      return { position: [0, 0, 6] as [number, number, number], lookAt: [0, 0, 0] as [number, number, number] };
+      return { position: [0, 0, 8] as [number, number, number], lookAt: [0, 0, 0] as [number, number, number] };
     } else if (level === 'category' && activeCategory) {
       const catPos = new THREE.Vector3(activeCategory.position_x, activeCategory.position_y, activeCategory.position_z);
       const direction = catPos.clone().normalize();
-      const cameraPos = direction.multiplyScalar(3.5);
+      const cameraPos = direction.multiplyScalar(5);
       return { 
         position: [cameraPos.x, cameraPos.y, cameraPos.z] as [number, number, number], 
         lookAt: [0, 0, 0] as [number, number, number] 
       };
     }
-    return { position: [0, 0, 6] as [number, number, number], lookAt: [0, 0, 0] as [number, number, number] };
+    return { position: [0, 0, 8] as [number, number, number], lookAt: [0, 0, 0] as [number, number, number] };
   }, [level, activeCategory]);
 
   // Apply Fibonacci distribution to categories
@@ -349,12 +349,13 @@ export function KnowledgeSphere({
   }, []);
 
   return (
-    <div className="w-full h-full" style={{ touchAction: 'none' }}>
+    <div className="w-screen h-screen overflow-hidden bg-black absolute inset-0" style={{ touchAction: 'none' }}>
       <Canvas
-        camera={{ position: [0, 0, 6], fov: 50 }}
-        style={{ background: 'transparent' }}
-        gl={{ antialias: true, alpha: true }}
+        camera={{ position: [0, 0, 20], fov: 50 }}
+        style={{ background: '#000000', width: '100%', height: '100%' }}
+        gl={{ antialias: true, alpha: false }}
       >
+        <color attach="background" args={['#000000']} />
         <SceneContent
           categories={categories}
           subcategories={subcategories}
