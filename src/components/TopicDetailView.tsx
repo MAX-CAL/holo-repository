@@ -1,12 +1,24 @@
 import { useState, useRef } from 'react';
 import { Category, Entry, NavigationState } from '@/types/knowledge';
 import { useEntries } from '@/hooks/useEntries';
+import { useCategories } from '@/hooks/useCategories';
 import { Breadcrumbs } from './Breadcrumbs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ArrowLeft, Plus, FileText, X, Calendar, Tag, Loader2, Brain, ImagePlus, Image } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { ArrowLeft, Plus, FileText, X, Calendar, Tag, Loader2, Brain, ImagePlus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -19,6 +31,7 @@ interface TopicDetailViewProps {
   onNavigateToRoot: () => void;
   onNavigateToCategory: () => void;
   onOverlayInteraction: (interacting: boolean) => void;
+  onDeleteSubcategory?: () => void;
 }
 
 export function TopicDetailView({ 
@@ -29,15 +42,33 @@ export function TopicDetailView({
   navigation,
   onNavigateToRoot,
   onNavigateToCategory,
-  onOverlayInteraction
+  onOverlayInteraction,
+  onDeleteSubcategory
 }: TopicDetailViewProps) {
   const { entries, loading, addEntry, deleteEntry } = useEntries(userId, subcategory.id);
+  const { deleteCategory } = useCategories(userId, category.id);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newEntry, setNewEntry] = useState({ title: '', content: '', tags: '', imageDescription: '' });
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDeleteSubcategory = async () => {
+    setIsDeleting(true);
+    const { error } = await deleteCategory(subcategory.id);
+    setIsDeleting(false);
+    
+    if (error) {
+      toast.error('Failed to delete subcategory');
+      return;
+    }
+    
+    toast.success('Subcategory deleted');
+    onDeleteSubcategory?.();
+    onBack();
+  };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -126,6 +157,41 @@ export function TopicDetailView({
             onNavigateToCategory={onNavigateToCategory}
           />
         </div>
+
+        {/* Delete subcategory button */}
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10 ml-2"
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="bg-card border-border">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete "{subcategory.name}"?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete this subcategory and all its entries. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteSubcategory}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       {/* Content */}

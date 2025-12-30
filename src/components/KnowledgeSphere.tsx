@@ -1,9 +1,26 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
 import { Canvas, useFrame, useThree, ThreeEvent } from '@react-three/fiber';
-import { OrbitControls, Sphere, MeshDistortMaterial, Html } from '@react-three/drei';
+import { OrbitControls, Sphere, MeshDistortMaterial, Text } from '@react-three/drei';
+import { damp3 } from 'maath/easing';
 import * as THREE from 'three';
 import { Category, ViewLevel } from '@/types/knowledge';
 import { Starfield } from './Starfield';
+
+// Fibonacci Sphere Algorithm for even node distribution
+function getFibonacciSpherePosition(index: number, total: number, radius: number = 2): [number, number, number] {
+  if (total === 0) return [0, 0, radius];
+  
+  const phi = Math.PI * (3 - Math.sqrt(5)); // Golden angle
+  const y = 1 - (index / (total - 1 || 1)) * 2; // y goes from 1 to -1
+  const radiusAtY = Math.sqrt(1 - y * y);
+  const theta = phi * index;
+  
+  return [
+    radius * radiusAtY * Math.cos(theta),
+    radius * y,
+    radius * radiusAtY * Math.sin(theta)
+  ];
+}
 
 interface NodeProps {
   position: [number, number, number];
@@ -13,14 +30,30 @@ interface NodeProps {
   isHovered: boolean;
   onHover: (hovered: boolean) => void;
   isSubcategory?: boolean;
+  cameraPosition: THREE.Vector3;
 }
 
-function InteractiveNode({ position, color, name, onClick, isHovered, onHover, isSubcategory = false }: NodeProps) {
+function InteractiveNode({ position, color, name, onClick, isHovered, onHover, isSubcategory = false, cameraPosition }: NodeProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const glowRef = useRef<THREE.Mesh>(null);
   
   const baseSize = isSubcategory ? 0.1 : 0.12;
   const glowSize = isSubcategory ? 0.15 : 0.2;
+  
+  // Check if node is on the front side of the sphere (facing camera)
+  const isFrontFacing = useMemo(() => {
+    const nodePos = new THREE.Vector3(...position);
+    const cameraDir = cameraPosition.clone().normalize();
+    const nodeDir = nodePos.clone().normalize();
+    return nodeDir.dot(cameraDir) > 0.1; // Threshold for "front facing"
+  }, [position, cameraPosition]);
+  
+  // Calculate distance-based text scale
+  const textScale = useMemo(() => {
+    const nodePos = new THREE.Vector3(...position);
+    const dist = nodePos.distanceTo(cameraPosition);
+    return Math.max(0.08, Math.min(0.12, 0.5 / dist));
+  }, [position, cameraPosition]);
   
   useFrame(() => {
     if (meshRef.current && glowRef.current) {
@@ -37,13 +70,13 @@ function InteractiveNode({ position, color, name, onClick, isHovered, onHover, i
 
   return (
     <group position={position}>
-      {/* Outer glow */}
+      {/* Outer glow - using emissive for accurate color */}
       <mesh ref={glowRef}>
         <sphereGeometry args={[glowSize, 16, 16]} />
-        <meshBasicMaterial color={color} transparent opacity={isSubcategory ? 0.1 : 0.15} />
+        <meshBasicMaterial color={color} transparent opacity={isSubcategory ? 0.15 : 0.2} />
       </mesh>
       
-      {/* Main node */}
+      {/* Main node - MeshBasicMaterial for true color independent of lighting */}
       <mesh
         ref={meshRef}
         onClick={handleClick}
@@ -51,26 +84,38 @@ function InteractiveNode({ position, color, name, onClick, isHovered, onHover, i
         onPointerOut={() => onHover(false)}
       >
         <sphereGeometry args={[baseSize, 32, 32]} />
-        <meshStandardMaterial
+        <meshBasicMaterial
           color={color}
-          emissive={color}
-          emissiveIntensity={isHovered ? 1 : 0.5}
-          metalness={0.3}
-          roughness={0.2}
+          toneMapped={false}
+        />
+      </mesh>
+      
+      {/* Inner bright core for glow effect */}
+      <mesh>
+        <sphereGeometry args={[baseSize * 0.7, 16, 16]} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={0.9}
+          toneMapped={false}
         />
       </mesh>
 
-      {/* Label */}
-      {isHovered && (
-        <Html
-          position={[0, baseSize + 0.15, 0]}
-          center
-          style={{ pointerEvents: 'none', whiteSpace: 'nowrap' }}
+      {/* Billboard text label - only for front-facing nodes */}
+      {isFrontFacing && (
+        <Text
+          position={[0, baseSize + 0.18, 0]}
+          fontSize={textScale}
+          color="white"
+          anchorX="center"
+          anchorY="bottom"
+          outlineWidth={0.008}
+          outlineColor="black"
+          font="/fonts/Inter-Medium.woff"
+          maxWidth={1}
         >
-          <div className="px-3 py-1.5 bg-card/95 backdrop-blur-md rounded-lg border border-border/50 text-sm font-medium text-foreground shadow-xl">
-            {name}
-          </div>
-        </Html>
+          {name}
+        </Text>
       )}
     </group>
   );
@@ -124,9 +169,10 @@ function CentralSphere({ color = "hsl(158, 64%, 20%)", distort = 0.15, scale = 2
 interface AnimatedCameraProps {
   targetPosition: [number, number, number];
   targetLookAt: [number, number, number];
+  onPositionUpdate: (position: THREE.Vector3) => void;
 }
 
-function AnimatedCamera({ targetPosition, targetLookAt }: AnimatedCameraProps) {
+function AnimatedCamera({ targetPosition, targetLookAt, onPositionUpdate }: AnimatedCameraProps) {
   const { camera } = useThree();
   const isAnimating = useRef(true);
   const prevTarget = useRef({ position: targetPosition, lookAt: targetLookAt });
@@ -142,18 +188,23 @@ function AnimatedCamera({ targetPosition, targetLookAt }: AnimatedCameraProps) {
     }
   }, [targetPosition, targetLookAt]);
 
-  useFrame(() => {
+  useFrame((_, delta) => {
+    // Always report camera position for label visibility
+    onPositionUpdate(camera.position.clone());
+    
     if (!isAnimating.current) return;
 
     const target = new THREE.Vector3(...targetPosition);
     const distance = camera.position.distanceTo(target);
 
-    if (distance < 0.1) {
+    if (distance < 0.05) {
       isAnimating.current = false;
       return;
     }
 
-    camera.position.lerp(target, 0.05);
+    // Smooth damping for fluid camera movement
+    const targetVec = new THREE.Vector3(...targetPosition);
+    damp3(camera.position, targetVec, 0.2, delta);
     camera.lookAt(new THREE.Vector3(...targetLookAt));
   });
 
@@ -168,6 +219,7 @@ interface SceneContentProps {
   onCategoryClick: (category: Category) => void;
   onSubcategoryClick: (subcategory: Category) => void;
   controlsEnabled: boolean;
+  isMobile: boolean;
 }
 
 function SceneContent({ 
@@ -177,9 +229,11 @@ function SceneContent({
   activeCategory, 
   onCategoryClick, 
   onSubcategoryClick,
-  controlsEnabled
+  controlsEnabled,
+  isMobile
 }: SceneContentProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [cameraPosition, setCameraPosition] = useState<THREE.Vector3>(new THREE.Vector3(0, 0, 6));
   
   const cameraConfig = useMemo(() => {
     if (level === 'root') {
@@ -196,18 +250,19 @@ function SceneContent({
     return { position: [0, 0, 6] as [number, number, number], lookAt: [0, 0, 0] as [number, number, number] };
   }, [level, activeCategory]);
 
+  // Apply Fibonacci distribution to categories
+  const categoriesWithPositions = useMemo(() => {
+    return categories.map((cat, index) => {
+      const [x, y, z] = getFibonacciSpherePosition(index, categories.length, 2);
+      return { ...cat, position_x: x, position_y: y, position_z: z };
+    });
+  }, [categories]);
+
+  // Apply Fibonacci distribution to subcategories
   const subcategoriesWithPositions = useMemo(() => {
     return subcategories.map((subcat, index) => {
-      const theta = (index / Math.max(subcategories.length, 1)) * Math.PI * 2;
-      const phi = Math.acos(2 * ((index + 0.5) / Math.max(subcategories.length, 1)) - 1);
-      const radius = 2;
-      
-      return {
-        ...subcat,
-        position_x: radius * Math.sin(phi) * Math.cos(theta),
-        position_y: radius * Math.sin(phi) * Math.sin(theta),
-        position_z: radius * Math.cos(phi)
-      };
+      const [x, y, z] = getFibonacciSpherePosition(index, subcategories.length, 2);
+      return { ...subcat, position_x: x, position_y: y, position_z: z };
     });
   }, [subcategories]);
 
@@ -217,18 +272,19 @@ function SceneContent({
     <>
       <AnimatedCamera 
         targetPosition={cameraConfig.position} 
-        targetLookAt={cameraConfig.lookAt} 
+        targetLookAt={cameraConfig.lookAt}
+        onPositionUpdate={setCameraPosition}
       />
       
       <Starfield count={800} />
       
       <CentralSphere color={sphereColor} />
 
-      <ambientLight intensity={0.3} />
-      <pointLight position={[10, 10, 10]} intensity={1} color="hsl(158, 64%, 51%)" />
-      <pointLight position={[-10, -10, -10]} intensity={0.5} color="hsl(172, 66%, 50%)" />
+      <ambientLight intensity={0.5} />
+      <pointLight position={[10, 10, 10]} intensity={0.8} color="hsl(158, 64%, 51%)" />
+      <pointLight position={[-10, -10, -10]} intensity={0.4} color="hsl(172, 66%, 50%)" />
 
-      {level === 'root' && categories.map(category => (
+      {level === 'root' && categoriesWithPositions.map(category => (
         <InteractiveNode
           key={category.id}
           position={[category.position_x, category.position_y, category.position_z]}
@@ -237,6 +293,7 @@ function SceneContent({
           onClick={() => onCategoryClick(category)}
           isHovered={hoveredId === category.id}
           onHover={(hovered) => setHoveredId(hovered ? category.id : null)}
+          cameraPosition={cameraPosition}
         />
       ))}
 
@@ -250,15 +307,17 @@ function SceneContent({
           isHovered={hoveredId === subcat.id}
           onHover={(hovered) => setHoveredId(hovered ? subcat.id : null)}
           isSubcategory
+          cameraPosition={cameraPosition}
         />
       ))}
 
       <OrbitControls
-        enablePan={false}
+        enablePan={!isMobile}
         minDistance={2.5}
         maxDistance={12}
         enableDamping
-        dampingFactor={0.05}
+        dampingFactor={0.08}
+        rotateSpeed={isMobile ? 0.5 : 0.8}
         enabled={controlsEnabled}
       />
     </>
@@ -284,11 +343,17 @@ export function KnowledgeSphere({
   onSubcategoryClick,
   controlsEnabled = true
 }: KnowledgeSphereProps) {
+  const isMobile = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 768px)').matches || 'ontouchstart' in window;
+  }, []);
+
   return (
-    <div className="w-full h-full">
+    <div className="w-full h-full" style={{ touchAction: 'none' }}>
       <Canvas
         camera={{ position: [0, 0, 6], fov: 50 }}
         style={{ background: 'transparent' }}
+        gl={{ antialias: true, alpha: true }}
       >
         <SceneContent
           categories={categories}
@@ -298,6 +363,7 @@ export function KnowledgeSphere({
           onCategoryClick={onCategoryClick}
           onSubcategoryClick={onSubcategoryClick}
           controlsEnabled={controlsEnabled}
+          isMobile={isMobile}
         />
       </Canvas>
     </div>
