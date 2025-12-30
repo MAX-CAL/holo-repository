@@ -106,6 +106,7 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
         onNavigateToRoot={navigateToRoot}
         onNavigateToCategory={navigateToCategory}
         onOverlayInteraction={setOverlayInteracting}
+        onDeleteSubcategory={handleBackFromEditor}
       />
     );
   }
