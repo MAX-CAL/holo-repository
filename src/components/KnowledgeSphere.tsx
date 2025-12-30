@@ -4,7 +4,6 @@ import { OrbitControls, Sphere, MeshDistortMaterial, Text } from '@react-three/d
 import { damp3 } from 'maath/easing';
 import * as THREE from 'three';
 import { Category, ViewLevel } from '@/types/knowledge';
-import { Starfield } from './Starfield';
 
 // Fibonacci Sphere Algorithm for even node distribution
 function getFibonacciSpherePosition(index: number, total: number, radius: number = 2): [number, number, number] {
@@ -106,12 +105,11 @@ function InteractiveNode({ position, color, name, onClick, isHovered, onHover, i
         <Text
           position={[0, baseSize + 0.18, 0]}
           fontSize={textScale}
-          color="white"
+          color="#ffffff"
           anchorX="center"
           anchorY="bottom"
           outlineWidth={0.008}
-          outlineColor="black"
-          font="/fonts/Inter-Medium.woff"
+          outlineColor="#000000"
           maxWidth={1}
         >
           {name}
@@ -127,39 +125,39 @@ interface CentralSphereProps {
   scale?: number;
 }
 
-function CentralSphere({ color = "hsl(158, 64%, 20%)", distort = 0.15, scale = 2 }: CentralSphereProps) {
+function CentralSphere({ color = "#22c55e", distort = 0.3, scale = 2 }: CentralSphereProps) {
   const sphereRef = useRef<THREE.Mesh>(null);
   const wireframeRef = useRef<THREE.Mesh>(null);
 
   useFrame(() => {
     if (sphereRef.current) {
-      sphereRef.current.rotation.y += 0.001;
+      sphereRef.current.rotation.y += 0.002;
     }
     if (wireframeRef.current) {
-      wireframeRef.current.rotation.y += 0.0008;
+      wireframeRef.current.rotation.y += 0.001;
     }
   });
 
   return (
     <>
+      {/* Main solid sphere */}
       <Sphere ref={sphereRef} args={[scale, 64, 64]}>
         <MeshDistortMaterial
           color={color}
           attach="material"
           distort={distort}
-          speed={1.5}
-          roughness={0.4}
-          metalness={0.8}
-          transparent
-          opacity={0.3}
+          speed={2}
+          roughness={0.2}
+          metalness={0.1}
         />
       </Sphere>
-      <Sphere ref={wireframeRef} args={[scale * 1.01, 32, 32]}>
+      {/* Wireframe overlay */}
+      <Sphere ref={wireframeRef} args={[scale * 1.02, 32, 32]}>
         <meshBasicMaterial
-          color="hsl(158, 64%, 51%)"
+          color="#4ade80"
           wireframe
           transparent
-          opacity={0.08}
+          opacity={0.15}
         />
       </Sphere>
     </>
@@ -266,7 +264,7 @@ function SceneContent({
     });
   }, [subcategories]);
 
-  const sphereColor = activeCategory ? activeCategory.color : "hsl(158, 64%, 20%)";
+  const sphereColor = activeCategory ? activeCategory.color : "#22c55e";
 
   return (
     <>
@@ -275,14 +273,12 @@ function SceneContent({
         targetLookAt={cameraConfig.lookAt}
         onPositionUpdate={setCameraPosition}
       />
-      
-      <Starfield count={800} />
-      
+
       <CentralSphere color={sphereColor} />
 
-      <ambientLight intensity={0.5} />
-      <pointLight position={[10, 10, 10]} intensity={0.8} color="hsl(158, 64%, 51%)" />
-      <pointLight position={[-10, -10, -10]} intensity={0.4} color="hsl(172, 66%, 50%)" />
+      <ambientLight intensity={1.2} />
+      <directionalLight position={[5, 5, 5]} intensity={1} />
+      <directionalLight position={[-5, -5, -5]} intensity={0.5} />
 
       {level === 'root' && categoriesWithPositions.map(category => (
         <InteractiveNode
@@ -349,13 +345,12 @@ export function KnowledgeSphere({
   }, []);
 
   return (
-    <div className="w-screen h-screen overflow-hidden bg-black absolute inset-0" style={{ touchAction: 'none' }}>
+    <div className="w-full h-full absolute inset-0" style={{ touchAction: 'none' }}>
       <Canvas
-        camera={{ position: [0, 0, 20], fov: 50 }}
-        style={{ background: '#000000', width: '100%', height: '100%' }}
-        gl={{ antialias: true, alpha: false }}
+        camera={{ position: [0, 0, 7], fov: 50 }}
+        gl={{ antialias: true, alpha: true }}
       >
-        <color attach="background" args={['#000000']} />
+        <color attach="background" args={['#fafafa']} />
         <SceneContent
           categories={categories}
           subcategories={subcategories}

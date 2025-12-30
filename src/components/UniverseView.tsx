@@ -118,7 +118,7 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
   );
 
   return (
-    <div className="fixed inset-0 bg-background overflow-hidden">
+    <div className="fixed inset-0 bg-[#fafafa] overflow-hidden">
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 h-16 flex items-center justify-between px-4 md:px-8 z-20 bg-background/50 backdrop-blur-sm border-b border-border/20">
         <div className="flex items-center gap-3">
