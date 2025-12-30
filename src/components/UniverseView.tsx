@@ -176,9 +176,9 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
       )}
 
       {/* 3D Canvas */}
-      <div className="absolute inset-0 pt-16">
+      <div className="absolute inset-0 w-screen h-screen overflow-hidden">
         {isLoading ? (
-          <div className="h-full flex items-center justify-center">
+          <div className="h-full w-full flex items-center justify-center bg-black">
             <div className="flex flex-col items-center gap-4">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">
