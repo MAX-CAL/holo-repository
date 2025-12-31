@@ -118,7 +118,7 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
   );
 
   return (
-    <div className="fixed inset-0 bg-[#0a0a0a] overflow-hidden">
+    <div className="fixed inset-0 bg-white overflow-hidden">
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 h-16 flex items-center justify-between px-4 md:px-8 z-20 bg-background/50 backdrop-blur-sm border-b border-border/20">
         <div className="flex items-center gap-3">
@@ -178,7 +178,7 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
       {/* 3D Canvas */}
       <div className="absolute inset-0 w-screen h-screen overflow-hidden">
         {isLoading ? (
-          <div className="h-full w-full flex items-center justify-center bg-black">
+          <div className="h-full w-full flex items-center justify-center bg-white">
             <div className="flex flex-col items-center gap-4">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">

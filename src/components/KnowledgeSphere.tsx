@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
 import { Canvas, useFrame, useThree, ThreeEvent } from '@react-three/fiber';
-import { OrbitControls, Sphere } from '@react-three/drei';
+import { OrbitControls, Sphere, Text } from '@react-three/drei';
 import { damp3 } from 'maath/easing';
 import * as THREE from 'three';
 import { Category, ViewLevel } from '@/types/knowledge';
@@ -29,18 +29,38 @@ interface NodeProps {
   isHovered: boolean;
   onHover: (hovered: boolean) => void;
   isSubcategory?: boolean;
-  cameraPosition: THREE.Vector3;
 }
 
-function InteractiveNode({ position, color, onClick, isHovered, onHover, isSubcategory = false }: Omit<NodeProps, 'name' | 'cameraPosition'> & { name?: string }) {
+function InteractiveNode({ position, color, name, onClick, isHovered, onHover, isSubcategory = false }: NodeProps) {
   const meshRef = useRef<THREE.Mesh>(null);
+  const groupRef = useRef<THREE.Group>(null);
+  const [isFacingCamera, setIsFacingCamera] = useState(false);
+  const { camera } = useThree();
   
-  const baseSize = isSubcategory ? 0.1 : 0.12;
+  // 50% bigger nodes: was 0.1/0.12, now 0.15/0.18
+  const baseSize = isSubcategory ? 0.15 : 0.18;
   
   useFrame(() => {
     if (meshRef.current) {
       const scale = isHovered ? 1.4 : 1;
       meshRef.current.scale.lerp(new THREE.Vector3(scale, scale, scale), 0.1);
+    }
+    
+    // Check if node is facing camera for dynamic label
+    if (groupRef.current) {
+      const nodePos = new THREE.Vector3(...position);
+      const cameraPos = camera.position.clone();
+      const cameraDir = new THREE.Vector3();
+      camera.getWorldDirection(cameraDir);
+      
+      // Vector from camera to node
+      const toNode = nodePos.clone().sub(cameraPos).normalize();
+      
+      // Dot product - 1 means directly in front, -1 means behind
+      const dot = cameraDir.dot(toNode);
+      
+      // Show label only when node is roughly in front of camera (within ~30 degree cone)
+      setIsFacingCamera(dot > 0.85);
     }
   });
 
@@ -50,8 +70,8 @@ function InteractiveNode({ position, color, onClick, isHovered, onHover, isSubca
   };
 
   return (
-    <group position={position}>
-      {/* Main node - solid color, no text */}
+    <group ref={groupRef} position={position}>
+      {/* Main node - solid color from database */}
       <mesh
         ref={meshRef}
         onClick={handleClick}
@@ -59,11 +79,26 @@ function InteractiveNode({ position, color, onClick, isHovered, onHover, isSubca
         onPointerOut={() => onHover(false)}
       >
         <sphereGeometry args={[baseSize, 32, 32]} />
-        <meshBasicMaterial
+        <meshStandardMaterial
           color={color}
-          toneMapped={false}
+          roughness={0.7}
+          metalness={0}
         />
       </mesh>
+      
+      {/* Dynamic label - only shows when facing camera */}
+      {isFacingCamera && (
+        <Text
+          position={[0, baseSize + 0.15, 0]}
+          fontSize={0.12}
+          color="#000000"
+          anchorX="center"
+          anchorY="bottom"
+          font={undefined}
+        >
+          {name}
+        </Text>
+      )}
     </group>
   );
 }
@@ -74,11 +109,11 @@ interface CentralSphereProps {
 
 function CentralSphere({ scale = 2 }: CentralSphereProps) {
   return (
-    <Sphere args={[scale, 128, 128]}>
+    <Sphere args={[scale, 128, 128]} castShadow receiveShadow>
       <meshStandardMaterial
         color="#d4d4d4"
-        roughness={0.3}
-        metalness={0.1}
+        roughness={1}
+        metalness={0}
       />
     </Sphere>
   );
@@ -87,10 +122,10 @@ function CentralSphere({ scale = 2 }: CentralSphereProps) {
 interface AnimatedCameraProps {
   targetPosition: [number, number, number];
   targetLookAt: [number, number, number];
-  onPositionUpdate: (position: THREE.Vector3) => void;
+  onAnimationComplete?: () => void;
 }
 
-function AnimatedCamera({ targetPosition, targetLookAt, onPositionUpdate }: AnimatedCameraProps) {
+function AnimatedCamera({ targetPosition, targetLookAt, onAnimationComplete }: AnimatedCameraProps) {
   const { camera } = useThree();
   const isAnimating = useRef(true);
   const prevTarget = useRef({ position: targetPosition, lookAt: targetLookAt });
@@ -107,9 +142,6 @@ function AnimatedCamera({ targetPosition, targetLookAt, onPositionUpdate }: Anim
   }, [targetPosition, targetLookAt]);
 
   useFrame((_, delta) => {
-    // Always report camera position for label visibility
-    onPositionUpdate(camera.position.clone());
-    
     if (!isAnimating.current) return;
 
     const target = new THREE.Vector3(...targetPosition);
@@ -117,6 +149,7 @@ function AnimatedCamera({ targetPosition, targetLookAt, onPositionUpdate }: Anim
 
     if (distance < 0.05) {
       isAnimating.current = false;
+      onAnimationComplete?.();
       return;
     }
 
@@ -138,6 +171,7 @@ interface SceneContentProps {
   onSubcategoryClick: (subcategory: Category) => void;
   controlsEnabled: boolean;
   isMobile: boolean;
+  controlsRef: React.RefObject<any>;
 }
 
 function SceneContent({ 
@@ -148,7 +182,8 @@ function SceneContent({
   onCategoryClick, 
   onSubcategoryClick,
   controlsEnabled,
-  isMobile
+  isMobile,
+  controlsRef
 }: SceneContentProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   
@@ -183,25 +218,41 @@ function SceneContent({
     });
   }, [subcategories]);
 
+  // Reset OrbitControls when transitioning back to root
+  useEffect(() => {
+    if (controlsRef.current && level === 'root') {
+      // Reset the controls target and update
+      controlsRef.current.target.set(0, 0, 0);
+      controlsRef.current.update();
+    }
+  }, [level, controlsRef]);
+
   return (
     <>
       <AnimatedCamera 
         targetPosition={cameraConfig.position} 
         targetLookAt={cameraConfig.lookAt}
-        onPositionUpdate={() => {}}
       />
 
       <CentralSphere />
 
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[10, 10, 10]} intensity={1} />
-      <directionalLight position={[-10, -10, -10]} intensity={0.3} />
+      {/* Improved lighting for white background - higher ambient for good color visibility */}
+      <ambientLight intensity={1.2} />
+      <directionalLight 
+        position={[5, 10, 7]} 
+        intensity={0.8} 
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+      />
+      <directionalLight position={[-5, -5, -5]} intensity={0.3} />
 
       {level === 'root' && categoriesWithPositions.map(category => (
         <InteractiveNode
           key={category.id}
           position={[category.position_x, category.position_y, category.position_z]}
           color={category.color}
+          name={category.name}
           onClick={() => onCategoryClick(category)}
           isHovered={hoveredId === category.id}
           onHover={(hovered) => setHoveredId(hovered ? category.id : null)}
@@ -212,7 +263,8 @@ function SceneContent({
         <InteractiveNode
           key={subcat.id}
           position={[subcat.position_x, subcat.position_y, subcat.position_z]}
-          color={activeCategory?.color || '#22c55e'}
+          color={subcat.color}
+          name={subcat.name}
           onClick={() => onSubcategoryClick(subcat)}
           isHovered={hoveredId === subcat.id}
           onHover={(hovered) => setHoveredId(hovered ? subcat.id : null)}
@@ -221,6 +273,7 @@ function SceneContent({
       ))}
 
       <OrbitControls
+        ref={controlsRef}
         enablePan={!isMobile}
         minDistance={2.5}
         maxDistance={12}
@@ -252,18 +305,29 @@ export function KnowledgeSphere({
   onSubcategoryClick,
   controlsEnabled = true
 }: KnowledgeSphereProps) {
+  const controlsRef = useRef<any>(null);
+  
   const isMobile = useMemo(() => {
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(max-width: 768px)').matches || 'ontouchstart' in window;
   }, []);
 
+  // Force re-enable controls when level changes back to root
+  useEffect(() => {
+    if (level === 'root' && controlsRef.current) {
+      controlsRef.current.enabled = true;
+      controlsRef.current.update();
+    }
+  }, [level]);
+
   return (
     <div className="w-full h-full absolute inset-0" style={{ touchAction: 'none' }}>
       <Canvas
-        camera={{ position: [0, 0, 7], fov: 50 }}
+        camera={{ position: [0, 0, 8], fov: 50 }}
         gl={{ antialias: true, alpha: true }}
+        shadows
       >
-        <color attach="background" args={['#0a0a0a']} />
+        <color attach="background" args={['#ffffff']} />
         <SceneContent
           categories={categories}
           subcategories={subcategories}
@@ -273,6 +337,7 @@ export function KnowledgeSphere({
           onSubcategoryClick={onSubcategoryClick}
           controlsEnabled={controlsEnabled}
           isMobile={isMobile}
+          controlsRef={controlsRef}
         />
       </Canvas>
     </div>
