@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
 import { Canvas, useFrame, useThree, ThreeEvent } from '@react-three/fiber';
-import { OrbitControls, Sphere, Text } from '@react-three/drei';
+import { OrbitControls, Sphere } from '@react-three/drei';
 import { damp3 } from 'maath/easing';
 import * as THREE from 'three';
 import { Category, ViewLevel } from '@/types/knowledge';
@@ -31,11 +31,8 @@ interface NodeProps {
   isSubcategory?: boolean;
 }
 
-function InteractiveNode({ position, color, name, onClick, isHovered, onHover, isSubcategory = false }: NodeProps) {
+function InteractiveNode({ position, color, onClick, isHovered, onHover, isSubcategory = false }: Omit<NodeProps, 'name'>) {
   const meshRef = useRef<THREE.Mesh>(null);
-  const groupRef = useRef<THREE.Group>(null);
-  const [isFacingCamera, setIsFacingCamera] = useState(false);
-  const { camera } = useThree();
   
   // 50% bigger nodes: was 0.1/0.12, now 0.15/0.18
   const baseSize = isSubcategory ? 0.15 : 0.18;
@@ -45,23 +42,6 @@ function InteractiveNode({ position, color, name, onClick, isHovered, onHover, i
       const scale = isHovered ? 1.4 : 1;
       meshRef.current.scale.lerp(new THREE.Vector3(scale, scale, scale), 0.1);
     }
-    
-    // Check if node is facing camera for dynamic label
-    if (groupRef.current) {
-      const nodePos = new THREE.Vector3(...position);
-      const cameraPos = camera.position.clone();
-      const cameraDir = new THREE.Vector3();
-      camera.getWorldDirection(cameraDir);
-      
-      // Vector from camera to node
-      const toNode = nodePos.clone().sub(cameraPos).normalize();
-      
-      // Dot product - 1 means directly in front, -1 means behind
-      const dot = cameraDir.dot(toNode);
-      
-      // Show label only when node is roughly in front of camera (within ~30 degree cone)
-      setIsFacingCamera(dot > 0.85);
-    }
   });
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
@@ -70,8 +50,7 @@ function InteractiveNode({ position, color, name, onClick, isHovered, onHover, i
   };
 
   return (
-    <group ref={groupRef} position={position}>
-      {/* Main node - solid color from database */}
+    <group position={position}>
       <mesh
         ref={meshRef}
         onClick={handleClick}
@@ -85,20 +64,6 @@ function InteractiveNode({ position, color, name, onClick, isHovered, onHover, i
           metalness={0}
         />
       </mesh>
-      
-      {/* Dynamic label - only shows when facing camera */}
-      {isFacingCamera && (
-        <Text
-          position={[0, baseSize + 0.15, 0]}
-          fontSize={0.12}
-          color="#000000"
-          anchorX="center"
-          anchorY="bottom"
-          font={undefined}
-        >
-          {name}
-        </Text>
-      )}
     </group>
   );
 }
@@ -252,7 +217,6 @@ function SceneContent({
           key={category.id}
           position={[category.position_x, category.position_y, category.position_z]}
           color={category.color}
-          name={category.name}
           onClick={() => onCategoryClick(category)}
           isHovered={hoveredId === category.id}
           onHover={(hovered) => setHoveredId(hovered ? category.id : null)}
@@ -264,7 +228,6 @@ function SceneContent({
           key={subcat.id}
           position={[subcat.position_x, subcat.position_y, subcat.position_z]}
           color={subcat.color}
-          name={subcat.name}
           onClick={() => onSubcategoryClick(subcat)}
           isHovered={hoveredId === subcat.id}
           onHover={(hovered) => setHoveredId(hovered ? subcat.id : null)}
