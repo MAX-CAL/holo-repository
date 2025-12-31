@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
 import { Canvas, useFrame, useThree, ThreeEvent } from '@react-three/fiber';
-import { OrbitControls, Sphere, MeshDistortMaterial, Text } from '@react-three/drei';
+import { OrbitControls, Sphere } from '@react-three/drei';
 import { damp3 } from 'maath/easing';
 import * as THREE from 'three';
 import { Category, ViewLevel } from '@/types/knowledge';
@@ -32,33 +32,15 @@ interface NodeProps {
   cameraPosition: THREE.Vector3;
 }
 
-function InteractiveNode({ position, color, name, onClick, isHovered, onHover, isSubcategory = false, cameraPosition }: NodeProps) {
+function InteractiveNode({ position, color, onClick, isHovered, onHover, isSubcategory = false }: Omit<NodeProps, 'name' | 'cameraPosition'> & { name?: string }) {
   const meshRef = useRef<THREE.Mesh>(null);
-  const glowRef = useRef<THREE.Mesh>(null);
   
   const baseSize = isSubcategory ? 0.1 : 0.12;
-  const glowSize = isSubcategory ? 0.15 : 0.2;
-  
-  // Check if node is on the front side of the sphere (facing camera)
-  const isFrontFacing = useMemo(() => {
-    const nodePos = new THREE.Vector3(...position);
-    const cameraDir = cameraPosition.clone().normalize();
-    const nodeDir = nodePos.clone().normalize();
-    return nodeDir.dot(cameraDir) > 0.1; // Threshold for "front facing"
-  }, [position, cameraPosition]);
-  
-  // Calculate distance-based text scale
-  const textScale = useMemo(() => {
-    const nodePos = new THREE.Vector3(...position);
-    const dist = nodePos.distanceTo(cameraPosition);
-    return Math.max(0.08, Math.min(0.12, 0.5 / dist));
-  }, [position, cameraPosition]);
   
   useFrame(() => {
-    if (meshRef.current && glowRef.current) {
-      const scale = isHovered ? 1.3 : 1;
+    if (meshRef.current) {
+      const scale = isHovered ? 1.4 : 1;
       meshRef.current.scale.lerp(new THREE.Vector3(scale, scale, scale), 0.1);
-      glowRef.current.scale.lerp(new THREE.Vector3(scale * 1.5, scale * 1.5, scale * 1.5), 0.1);
     }
   });
 
@@ -69,13 +51,7 @@ function InteractiveNode({ position, color, name, onClick, isHovered, onHover, i
 
   return (
     <group position={position}>
-      {/* Outer glow - using emissive for accurate color */}
-      <mesh ref={glowRef}>
-        <sphereGeometry args={[glowSize, 16, 16]} />
-        <meshBasicMaterial color={color} transparent opacity={isSubcategory ? 0.15 : 0.2} />
-      </mesh>
-      
-      {/* Main node - MeshBasicMaterial for true color independent of lighting */}
+      {/* Main node - solid color, no text */}
       <mesh
         ref={meshRef}
         onClick={handleClick}
@@ -88,79 +64,23 @@ function InteractiveNode({ position, color, name, onClick, isHovered, onHover, i
           toneMapped={false}
         />
       </mesh>
-      
-      {/* Inner bright core for glow effect */}
-      <mesh>
-        <sphereGeometry args={[baseSize * 0.7, 16, 16]} />
-        <meshBasicMaterial
-          color={color}
-          transparent
-          opacity={0.9}
-          toneMapped={false}
-        />
-      </mesh>
-
-      {/* Billboard text label - only for front-facing nodes */}
-      {isFrontFacing && (
-        <Text
-          position={[0, baseSize + 0.18, 0]}
-          fontSize={textScale}
-          color="#ffffff"
-          anchorX="center"
-          anchorY="bottom"
-          outlineWidth={0.008}
-          outlineColor="#000000"
-          maxWidth={1}
-        >
-          {name}
-        </Text>
-      )}
     </group>
   );
 }
 
 interface CentralSphereProps {
-  color?: string;
-  distort?: number;
   scale?: number;
 }
 
-function CentralSphere({ color = "#22c55e", distort = 0.3, scale = 2 }: CentralSphereProps) {
-  const sphereRef = useRef<THREE.Mesh>(null);
-  const wireframeRef = useRef<THREE.Mesh>(null);
-
-  useFrame(() => {
-    if (sphereRef.current) {
-      sphereRef.current.rotation.y += 0.002;
-    }
-    if (wireframeRef.current) {
-      wireframeRef.current.rotation.y += 0.001;
-    }
-  });
-
+function CentralSphere({ scale = 2 }: CentralSphereProps) {
   return (
-    <>
-      {/* Main solid sphere */}
-      <Sphere ref={sphereRef} args={[scale, 64, 64]}>
-        <MeshDistortMaterial
-          color={color}
-          attach="material"
-          distort={distort}
-          speed={2}
-          roughness={0.2}
-          metalness={0.1}
-        />
-      </Sphere>
-      {/* Wireframe overlay */}
-      <Sphere ref={wireframeRef} args={[scale * 1.02, 32, 32]}>
-        <meshBasicMaterial
-          color="#4ade80"
-          wireframe
-          transparent
-          opacity={0.15}
-        />
-      </Sphere>
-    </>
+    <Sphere args={[scale, 128, 128]}>
+      <meshStandardMaterial
+        color="#d4d4d4"
+        roughness={0.3}
+        metalness={0.1}
+      />
+    </Sphere>
   );
 }
 
@@ -231,7 +151,6 @@ function SceneContent({
   isMobile
 }: SceneContentProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [cameraPosition, setCameraPosition] = useState<THREE.Vector3>(new THREE.Vector3(0, 0, 20));
   
   const cameraConfig = useMemo(() => {
     if (level === 'root') {
@@ -264,32 +183,28 @@ function SceneContent({
     });
   }, [subcategories]);
 
-  const sphereColor = activeCategory ? activeCategory.color : "#22c55e";
-
   return (
     <>
       <AnimatedCamera 
         targetPosition={cameraConfig.position} 
         targetLookAt={cameraConfig.lookAt}
-        onPositionUpdate={setCameraPosition}
+        onPositionUpdate={() => {}}
       />
 
-      <CentralSphere color={sphereColor} />
+      <CentralSphere />
 
-      <ambientLight intensity={1.2} />
-      <directionalLight position={[5, 5, 5]} intensity={1} />
-      <directionalLight position={[-5, -5, -5]} intensity={0.5} />
+      <ambientLight intensity={0.6} />
+      <directionalLight position={[10, 10, 10]} intensity={1} />
+      <directionalLight position={[-10, -10, -10]} intensity={0.3} />
 
       {level === 'root' && categoriesWithPositions.map(category => (
         <InteractiveNode
           key={category.id}
           position={[category.position_x, category.position_y, category.position_z]}
           color={category.color}
-          name={category.name}
           onClick={() => onCategoryClick(category)}
           isHovered={hoveredId === category.id}
           onHover={(hovered) => setHoveredId(hovered ? category.id : null)}
-          cameraPosition={cameraPosition}
         />
       ))}
 
@@ -298,12 +213,10 @@ function SceneContent({
           key={subcat.id}
           position={[subcat.position_x, subcat.position_y, subcat.position_z]}
           color={activeCategory?.color || '#22c55e'}
-          name={subcat.name}
           onClick={() => onSubcategoryClick(subcat)}
           isHovered={hoveredId === subcat.id}
           onHover={(hovered) => setHoveredId(hovered ? subcat.id : null)}
           isSubcategory
-          cameraPosition={cameraPosition}
         />
       ))}
 
@@ -350,7 +263,7 @@ export function KnowledgeSphere({
         camera={{ position: [0, 0, 7], fov: 50 }}
         gl={{ antialias: true, alpha: true }}
       >
-        <color attach="background" args={['#fafafa']} />
+        <color attach="background" args={['#0a0a0a']} />
         <SceneContent
           categories={categories}
           subcategories={subcategories}
