@@ -86,7 +86,8 @@ export function AuthGate({
               placeholder="Enter your Access Code" 
               value={accessCode} 
               onChange={e => setAccessCode(e.target.value)} 
-              className="h-14 bg-card/50 border-border text-center text-lg placeholder:text-muted-foreground/50 focus:border-primary/50 focus:ring-primary/20 transition-all" 
+              className="h-14 bg-card/50 border-border text-center text-base placeholder:text-muted-foreground/50 focus:border-primary/50 focus:ring-primary/20 transition-all pointer-events-auto" 
+              style={{ fontSize: '16px', touchAction: 'manipulation' }}
               autoFocus 
               autoComplete="off" 
             />
@@ -94,7 +95,8 @@ export function AuthGate({
             <Button 
               type="submit" 
               disabled={isLoading} 
-              className="w-full h-12 bg-black hover:bg-black/90 text-white font-medium transition-all"
+              className="w-full h-12 bg-black hover:bg-black/90 text-white font-medium transition-all pointer-events-auto"
+              style={{ touchAction: 'manipulation' }}
             >
               {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Enter Universe'}
             </Button>
