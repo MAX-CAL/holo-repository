@@ -80,15 +80,16 @@ export function AuthGate({
         </div>
 
         {!showCreatePrompt ? (
-          <form onSubmit={handleSubmit} className="w-full space-y-4">
+          <form onSubmit={handleSubmit} className="w-full space-y-4 pointer-events-auto">
             <Input 
               type="text" 
+              inputMode="text"
               placeholder="Enter your Access Code" 
               value={accessCode} 
               onChange={e => setAccessCode(e.target.value)} 
+              onTouchStart={(e) => e.currentTarget.focus()}
               className="h-14 bg-card/50 border-border text-center text-base placeholder:text-muted-foreground/50 focus:border-primary/50 focus:ring-primary/20 transition-all pointer-events-auto" 
-              style={{ fontSize: '16px', touchAction: 'manipulation' }}
-              autoFocus 
+              style={{ fontSize: '16px', touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent', WebkitUserSelect: 'text', userSelect: 'text' } as React.CSSProperties}
               autoComplete="off" 
             />
 
