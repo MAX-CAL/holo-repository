@@ -3,12 +3,12 @@ import { KnowledgeSphere } from './KnowledgeSphere';
 import { AddCategoryDialog } from './AddCategoryDialog';
 import { TopicDetailView } from './TopicDetailView';
 import { Breadcrumbs } from './Breadcrumbs';
+import { QuickCapture } from './QuickCapture';
 import { useCategories } from '@/hooks/useCategories';
 import { useAuth } from '@/hooks/useAuth';
 import { Category, NavigationState, ViewLevel } from '@/types/knowledge';
 import { Button } from '@/components/ui/button';
-import { LogOut, Loader2, Brain, ArrowLeft } from 'lucide-react';
-import { toast } from 'sonner';
+import { LogOut, Loader2, ArrowLeft } from 'lucide-react';
 
 interface UniverseViewProps {
   onLogout: () => void;
@@ -41,7 +41,6 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
   const handleLogout = async () => {
     setIsLoggingOut(true);
     signOut();
-    toast.success('Logged out successfully');
     onLogout();
   };
 
@@ -133,8 +132,9 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
             </Button>
           )}
           
-          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-            <Brain className="w-5 h-5 text-primary" />
+          {/* Black circle with white dot logo */}
+          <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center">
+            <div className="w-4 h-4 rounded-full bg-white" />
           </div>
           
           <div className="hidden sm:block">
@@ -237,6 +237,11 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
           onAdd={handleAddSubcategory} 
           parentId={navigation.activeCategory?.id}
         />
+      )}
+
+      {/* Quick Capture - only at root level */}
+      {navigation.level === 'root' && user && (
+        <QuickCapture userId={user.id} />
       )}
     </div>
   );
