@@ -183,11 +183,13 @@ function SceneContent({
     });
   }, [subcategories]);
 
-  // Reset OrbitControls when transitioning back to root
+  // Reset OrbitControls when transitioning between levels
   useEffect(() => {
-    if (controlsRef.current && level === 'root') {
-      // Reset the controls target and update
+    if (controlsRef.current) {
+      // Always reset target to center
       controlsRef.current.target.set(0, 0, 0);
+      // Force enable controls
+      controlsRef.current.enabled = true;
       controlsRef.current.update();
     }
   }, [level, controlsRef]);
@@ -237,13 +239,15 @@ function SceneContent({
 
       <OrbitControls
         ref={controlsRef}
-        enablePan={!isMobile}
+        enablePan={false}
         minDistance={2.5}
         maxDistance={12}
         enableDamping
         dampingFactor={0.08}
         rotateSpeed={isMobile ? 0.5 : 0.8}
         enabled={controlsEnabled}
+        enableZoom={true}
+        enableRotate={true}
       />
     </>
   );
