@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Loader2, Mail, Lock, KeyRound } from 'lucide-react';
+import { Loader2, Mail, Lock, KeyRound, ArrowLeft } from 'lucide-react';
 import { z } from 'zod';
 
 const authSchema = z.object({
@@ -16,12 +16,14 @@ interface AuthScreenProps {
   onSuccess: () => void;
 }
 
+type AuthView = 'login' | 'signup' | 'forgot-password';
+
 export function AuthScreen({ onSuccess }: AuthScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [accessCode, setAccessCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [view, setView] = useState<AuthView>('login');
   const [isAnimating, setIsAnimating] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -29,7 +31,34 @@ export function AuthScreen({ onSuccess }: AuthScreenProps) {
     setIsLoading(true);
 
     try {
-      if (isSignUp) {
+      if (view === 'forgot-password') {
+        // Validate email for password reset
+        const emailValidation = z.string().trim().email({ message: "Invalid email address" }).safeParse(email);
+        if (!emailValidation.success) {
+          toast.error(emailValidation.error.errors[0].message);
+          setIsLoading(false);
+          return;
+        }
+
+        const redirectUrl = `${window.location.origin}/`;
+        
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: redirectUrl,
+        });
+
+        if (error) {
+          toast.error(error.message);
+          setIsLoading(false);
+          return;
+        }
+
+        toast.success('Check your email for a password reset link');
+        setView('login');
+        setIsLoading(false);
+        return;
+      }
+
+      if (view === 'signup') {
         // Validate all fields for signup
         const validation = authSchema.safeParse({ email, password, accessCode });
         if (!validation.success) {
@@ -114,6 +143,22 @@ export function AuthScreen({ onSuccess }: AuthScreenProps) {
     userSelect: 'text' 
   } as React.CSSProperties;
 
+  const getTitle = () => {
+    switch (view) {
+      case 'signup': return 'Create your universe';
+      case 'forgot-password': return 'Reset your password';
+      default: return 'Welcome back';
+    }
+  };
+
+  const getButtonText = () => {
+    switch (view) {
+      case 'signup': return 'Create Universe';
+      case 'forgot-password': return 'Send Reset Link';
+      default: return 'Sign In';
+    }
+  };
+
   return (
     <div 
       className={`fixed inset-0 flex items-center justify-center bg-background transition-all duration-1000 z-50 ${isAnimating ? 'opacity-0 scale-150' : 'opacity-100 scale-100'}`}
@@ -128,12 +173,23 @@ export function AuthScreen({ onSuccess }: AuthScreenProps) {
           <div className="text-center">
             <h1 className="font-medium text-foreground text-2xl">I</h1>
             <p className="text-sm text-muted-foreground">
-              {isSignUp ? 'Create your universe' : 'Welcome back'}
+              {getTitle()}
             </p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="w-full space-y-4 pointer-events-auto">
+          {view === 'forgot-password' && (
+            <button
+              type="button"
+              onClick={() => setView('login')}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to login
+            </button>
+          )}
+
           <div className="relative">
             <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input 
@@ -149,21 +205,23 @@ export function AuthScreen({ onSuccess }: AuthScreenProps) {
             />
           </div>
 
-          <div className="relative">
-            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <Input 
-              type="password" 
-              placeholder="Password" 
-              value={password} 
-              onChange={e => setPassword(e.target.value)} 
-              onTouchStart={(e) => e.currentTarget.focus()}
-              className="h-14 pl-12 bg-card/50 border-border text-base placeholder:text-muted-foreground/50 focus:border-primary/50 focus:ring-primary/20 transition-all pointer-events-auto" 
-              style={inputStyle}
-              autoComplete={isSignUp ? "new-password" : "current-password"} 
-            />
-          </div>
+          {view !== 'forgot-password' && (
+            <div className="relative">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <Input 
+                type="password" 
+                placeholder="Password" 
+                value={password} 
+                onChange={e => setPassword(e.target.value)} 
+                onTouchStart={(e) => e.currentTarget.focus()}
+                className="h-14 pl-12 bg-card/50 border-border text-base placeholder:text-muted-foreground/50 focus:border-primary/50 focus:ring-primary/20 transition-all pointer-events-auto" 
+                style={inputStyle}
+                autoComplete={view === 'signup' ? "new-password" : "current-password"} 
+              />
+            </div>
+          )}
 
-          {isSignUp && (
+          {view === 'signup' && (
             <div className="relative">
               <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <Input 
@@ -183,6 +241,16 @@ export function AuthScreen({ onSuccess }: AuthScreenProps) {
             </div>
           )}
 
+          {view === 'login' && (
+            <button
+              type="button"
+              onClick={() => setView('forgot-password')}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors w-full text-right"
+            >
+              Forgot password?
+            </button>
+          )}
+
           <Button 
             type="submit" 
             disabled={isLoading} 
@@ -192,19 +260,21 @@ export function AuthScreen({ onSuccess }: AuthScreenProps) {
             {isLoading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
-              isSignUp ? 'Create Universe' : 'Sign In'
+              getButtonText()
             )}
           </Button>
         </form>
 
-        <button
-          type="button"
-          onClick={() => setIsSignUp(!isSignUp)}
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors pointer-events-auto"
-          style={{ touchAction: 'manipulation' }}
-        >
-          {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-        </button>
+        {view !== 'forgot-password' && (
+          <button
+            type="button"
+            onClick={() => setView(view === 'signup' ? 'login' : 'signup')}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors pointer-events-auto"
+            style={{ touchAction: 'manipulation' }}
+          >
+            {view === 'signup' ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+          </button>
+        )}
       </div>
     </div>
   );

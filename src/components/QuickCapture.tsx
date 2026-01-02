@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, Sparkles, Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { VoiceRecorder } from './VoiceRecorder';
 
 interface QuickCaptureProps {
   userId: string;
@@ -59,6 +60,10 @@ export function QuickCapture({ userId }: QuickCaptureProps) {
           className="flex-1 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-sm placeholder:text-muted-foreground/60"
           disabled={isProcessing}
         />
+        
+        {/* Voice Recorder */}
+        <VoiceRecorder userId={userId} />
+        
         <Button 
           type="submit" 
           size="sm" 
