@@ -1,21 +1,13 @@
-import { useState, useEffect } from 'react';
-import { AuthGate } from '@/components/AuthGate';
+import { AuthScreen } from '@/components/AuthScreen';
+import { LockScreen } from '@/components/LockScreen';
 import { UniverseView } from '@/components/UniverseView';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
 
 const Index = () => {
-  const { user, loading } = useAuth();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { user, loading, isUnlocked, unlock, signOut } = useAuth();
 
-  useEffect(() => {
-    if (user) {
-      setIsAuthenticated(true);
-    } else {
-      setIsAuthenticated(false);
-    }
-  }, [user]);
-
+  // Show loading spinner while checking auth state
   if (loading) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background">
@@ -24,11 +16,24 @@ const Index = () => {
     );
   }
 
-  if (!isAuthenticated) {
-    return <AuthGate onSuccess={() => setIsAuthenticated(true)} />;
+  // Not logged in -> Show signup/login screen
+  if (!user) {
+    return <AuthScreen onSuccess={() => {}} />;
   }
 
-  return <UniverseView onLogout={() => setIsAuthenticated(false)} />;
+  // Logged in but not unlocked -> Show lock screen
+  if (!isUnlocked) {
+    return (
+      <LockScreen 
+        user={user} 
+        onUnlock={unlock} 
+        onLogout={signOut} 
+      />
+    );
+  }
+
+  // Logged in and unlocked -> Show the app
+  return <UniverseView onLogout={signOut} />;
 };
 
 export default Index;

@@ -1,5 +1,6 @@
 export interface User {
   id: string;
+  email: string | null;
   access_code: string;
   created_at: string;
   updated_at: string;
