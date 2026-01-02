@@ -4,11 +4,13 @@ import { AddCategoryDialog } from './AddCategoryDialog';
 import { TopicDetailView } from './TopicDetailView';
 import { Breadcrumbs } from './Breadcrumbs';
 import { QuickCapture } from './QuickCapture';
+import { CategoryContextMenu } from './CategoryContextMenu';
 import { useCategories } from '@/hooks/useCategories';
 import { useAuth } from '@/hooks/useAuth';
 import { Category, NavigationState, ViewLevel } from '@/types/knowledge';
 import { Button } from '@/components/ui/button';
 import { LogOut, Loader2, ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface UniverseViewProps {
   onLogout: () => void;
@@ -18,6 +20,10 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
   const { user, signOut } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [overlayInteracting, setOverlayInteracting] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{
+    category: Category;
+    position: { x: number; y: number };
+  } | null>(null);
   
   // Navigation state machine
   const [navigation, setNavigation] = useState<NavigationState>({
@@ -27,16 +33,22 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
   });
 
   // Fetch main categories (parent_id is null)
-  const { categories, loading: categoriesLoading, addCategory: addMainCategory } = useCategories(
-    user?.id,
-    null
-  );
+  const { 
+    categories, 
+    loading: categoriesLoading, 
+    addCategory: addMainCategory,
+    deleteCategory: deleteMainCategory,
+    refetch: refetchCategories 
+  } = useCategories(user?.id, null);
 
   // Fetch subcategories for the active category
-  const { categories: subcategories, loading: subcategoriesLoading, addCategory: addSubcategory } = useCategories(
-    user?.id,
-    navigation.activeCategory?.id || null
-  );
+  const { 
+    categories: subcategories, 
+    loading: subcategoriesLoading, 
+    addCategory: addSubcategory,
+    deleteCategory: deleteSubcategory,
+    refetch: refetchSubcategories 
+  } = useCategories(user?.id, navigation.activeCategory?.id || null);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -91,6 +103,34 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
 
   const handleAddSubcategory = async (name: string, color: string) => {
     return addSubcategory(name, color, navigation.activeCategory?.id || null);
+  };
+
+  // Context menu for long press / right click on nodes
+  const handleCategoryContextMenu = useCallback((category: Category, event: { clientX: number; clientY: number }) => {
+    setContextMenu({
+      category,
+      position: { x: event.clientX, y: event.clientY }
+    });
+  }, []);
+
+  const handleDeleteCategory = async (id: string) => {
+    const result = navigation.level === 'root' 
+      ? await deleteMainCategory(id)
+      : await deleteSubcategory(id);
+    
+    if (!result.error) {
+      if (navigation.level === 'root') {
+        refetchCategories();
+      } else {
+        refetchSubcategories();
+      }
+    }
+    
+    return result;
+  };
+
+  const closeContextMenu = () => {
+    setContextMenu(null);
   };
 
   // Show editor overlay when at level 3
@@ -223,10 +263,20 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
           <p className="text-xs text-muted-foreground/60 text-center">
             {navigation.level === 'root' 
-              ? 'Drag to rotate • Scroll/pinch to zoom • Click nodes to explore'
-              : 'Click sub-category nodes to open editor'}
+              ? 'Drag to rotate • Scroll/pinch to zoom • Click to explore • Long-press to delete'
+              : 'Click nodes to open • Long-press to delete'}
           </p>
         </div>
+      )}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <CategoryContextMenu
+          category={contextMenu.category}
+          position={contextMenu.position}
+          onDelete={handleDeleteCategory}
+          onClose={closeContextMenu}
+        />
       )}
 
       {/* Add category/subcategory button */}
