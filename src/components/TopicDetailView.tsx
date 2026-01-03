@@ -3,6 +3,7 @@ import { Category, Entry, NavigationState } from '@/types/knowledge';
 import { useEntries } from '@/hooks/useEntries';
 import { useCategories } from '@/hooks/useCategories';
 import { Breadcrumbs } from './Breadcrumbs';
+import { EditEntryDialog } from './EditEntryDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,7 +19,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Plus, FileText, X, Calendar, Tag, Loader2, Brain, ImagePlus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, FileText, X, Calendar, Tag, Loader2, Brain, ImagePlus, Trash2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -45,7 +46,7 @@ export function TopicDetailView({
   onOverlayInteraction,
   onDeleteSubcategory
 }: TopicDetailViewProps) {
-  const { entries, loading, addEntry, deleteEntry } = useEntries(userId, subcategory.id);
+  const { entries, loading, addEntry, updateEntry, deleteEntry } = useEntries(userId, subcategory.id);
   const { deleteCategory } = useCategories(userId, category.id);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newEntry, setNewEntry] = useState({ title: '', content: '', tags: '', imageDescription: '' });
@@ -53,6 +54,7 @@ export function TopicDetailView({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDeleteSubcategory = async () => {
@@ -118,6 +120,16 @@ export function TopicDetailView({
       return;
     }
     toast.success('Entry deleted');
+  };
+
+  const handleUpdateEntry = async (id: string, updates: Partial<Entry>) => {
+    const { error } = await updateEntry(id, updates);
+    if (error) {
+      toast.error('Failed to update entry');
+      return { error };
+    }
+    toast.success('Entry updated');
+    return {};
   };
 
   const clearImage = () => {
@@ -313,14 +325,25 @@ export function TopicDetailView({
                   key={entry.id} 
                   className="break-inside-avoid bg-card/80 border border-border/50 rounded-xl overflow-hidden group relative hover:border-primary/30 transition-colors"
                 >
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute top-2 right-2 w-7 h-7 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-background/80"
-                    onClick={() => handleDeleteEntry(entry.id)}
-                  >
-                    <X className="w-3.5 h-3.5 text-destructive" />
-                  </Button>
+                  {/* Action buttons */}
+                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="w-7 h-7 bg-background/80 hover:bg-background"
+                      onClick={() => setEditingEntry(entry)}
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-foreground" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="w-7 h-7 bg-background/80 hover:bg-background"
+                      onClick={() => handleDeleteEntry(entry.id)}
+                    >
+                      <X className="w-3.5 h-3.5 text-destructive" />
+                    </Button>
+                  </div>
 
                   {entry.image_url && (
                     <div className="relative">
@@ -376,6 +399,16 @@ export function TopicDetailView({
           )}
         </div>
       </div>
+
+      {/* Edit Entry Dialog */}
+      {editingEntry && (
+        <EditEntryDialog
+          entry={editingEntry}
+          open={!!editingEntry}
+          onOpenChange={(open) => !open && setEditingEntry(null)}
+          onSave={handleUpdateEntry}
+        />
+      )}
     </div>
   );
 }

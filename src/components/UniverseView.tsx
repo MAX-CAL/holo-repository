@@ -234,6 +234,7 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
             activeCategory={navigation.activeCategory}
             onCategoryClick={handleCategoryClick}
             onSubcategoryClick={handleSubcategoryClick}
+            onCategoryLongPress={handleCategoryContextMenu}
             controlsEnabled={!overlayInteracting}
           />
         )}

@@ -48,7 +48,7 @@ export function QuickCapture({ userId }: QuickCaptureProps) {
   return (
     <form 
       onSubmit={handleSubmit} 
-      className="absolute bottom-4 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:max-w-xl z-30"
+      className="absolute bottom-4 left-4 right-20 md:left-1/2 md:right-auto md:-translate-x-1/2 md:max-w-xl md:w-full z-20"
     >
       <div className="flex items-center gap-2 bg-card/90 backdrop-blur-sm border border-border rounded-full px-4 py-2 shadow-lg">
         <Sparkles className="w-4 h-4 text-muted-foreground flex-shrink-0" />

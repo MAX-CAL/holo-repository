@@ -139,16 +139,12 @@ export function ColorPicker({ color, onChange }: ColorPickerProps) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button 
-          variant="outline" 
-          className="w-full h-10 justify-start gap-3 border-border/50"
-        >
-          <div 
-            className="w-6 h-6 rounded-md border border-border/50"
-            style={{ backgroundColor: color }}
-          />
-          <span className="font-mono text-sm">{color}</span>
-        </Button>
+        <button 
+          type="button"
+          className="w-8 h-8 rounded-full border-2 border-border/50 shadow-sm hover:scale-110 transition-transform cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          style={{ backgroundColor: color }}
+          aria-label="Pick a color"
+        />
       </PopoverTrigger>
       <PopoverContent className="w-64 p-3 bg-card border-border" align="start">
         <div className="space-y-3">
@@ -173,7 +169,7 @@ export function ColorPicker({ color, onChange }: ColorPickerProps) {
           {/* Hex input */}
           <div className="flex gap-2">
             <div 
-              className="w-10 h-10 rounded-md border border-border/50 shrink-0"
+              className="w-10 h-10 rounded-full border border-border/50 shrink-0"
               style={{ backgroundColor: color }}
             />
             <Input

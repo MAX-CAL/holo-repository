@@ -72,8 +72,8 @@ export function AddCategoryDialog({ onAdd, parentId = null, buttonLabel }: AddCa
                 autoFocus
               />
 
-              <div>
-                <label className="text-sm text-muted-foreground mb-2 block">
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-muted-foreground">
                   Color
                 </label>
                 <ColorPicker color={color} onChange={setColor} />
