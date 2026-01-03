@@ -26,13 +26,16 @@ interface NodeProps {
   color: string;
   name: string;
   onClick: () => void;
+  onLongPress?: (e: { clientX: number; clientY: number }) => void;
   isHovered: boolean;
   onHover: (hovered: boolean) => void;
   isSubcategory?: boolean;
 }
 
-function InteractiveNode({ position, color, onClick, isHovered, onHover, isSubcategory = false }: Omit<NodeProps, 'name'>) {
+function InteractiveNode({ position, color, onClick, onLongPress, isHovered, onHover, isSubcategory = false }: Omit<NodeProps, 'name'>) {
   const meshRef = useRef<THREE.Mesh>(null);
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const isLongPress = useRef(false);
   
   // 50% bigger nodes: was 0.1/0.12, now 0.15/0.18
   const baseSize = isSubcategory ? 0.15 : 0.18;
@@ -44,18 +47,51 @@ function InteractiveNode({ position, color, onClick, isHovered, onHover, isSubca
     }
   });
 
-  const handleClick = (e: ThreeEvent<MouseEvent>) => {
+  const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
-    onClick();
+    isLongPress.current = false;
+    
+    longPressTimer.current = setTimeout(() => {
+      isLongPress.current = true;
+      if (onLongPress) {
+        // Get screen coordinates from the native event
+        const nativeEvent = e.nativeEvent;
+        onLongPress({ clientX: nativeEvent.clientX, clientY: nativeEvent.clientY });
+      }
+    }, 500);
+  };
+
+  const handlePointerUp = (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation();
+    
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    
+    // Only trigger click if it wasn't a long press
+    if (!isLongPress.current) {
+      onClick();
+    }
+    isLongPress.current = false;
+  };
+
+  const handlePointerLeave = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    onHover(false);
   };
 
   return (
     <group position={position}>
       <mesh
         ref={meshRef}
-        onClick={handleClick}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
         onPointerOver={() => onHover(true)}
-        onPointerOut={() => onHover(false)}
+        onPointerLeave={handlePointerLeave}
       >
         <sphereGeometry args={[baseSize, 32, 32]} />
         <meshStandardMaterial
@@ -134,6 +170,7 @@ interface SceneContentProps {
   activeCategory: Category | null;
   onCategoryClick: (category: Category) => void;
   onSubcategoryClick: (subcategory: Category) => void;
+  onCategoryLongPress?: (category: Category, event: { clientX: number; clientY: number }) => void;
   controlsEnabled: boolean;
   isMobile: boolean;
   controlsRef: React.RefObject<any>;
@@ -146,6 +183,7 @@ function SceneContent({
   activeCategory, 
   onCategoryClick, 
   onSubcategoryClick,
+  onCategoryLongPress,
   controlsEnabled,
   isMobile,
   controlsRef
@@ -220,6 +258,7 @@ function SceneContent({
           position={[category.position_x, category.position_y, category.position_z]}
           color={category.color}
           onClick={() => onCategoryClick(category)}
+          onLongPress={(e) => onCategoryLongPress?.(category, e)}
           isHovered={hoveredId === category.id}
           onHover={(hovered) => setHoveredId(hovered ? category.id : null)}
         />
@@ -231,6 +270,7 @@ function SceneContent({
           position={[subcat.position_x, subcat.position_y, subcat.position_z]}
           color={subcat.color}
           onClick={() => onSubcategoryClick(subcat)}
+          onLongPress={(e) => onCategoryLongPress?.(subcat, e)}
           isHovered={hoveredId === subcat.id}
           onHover={(hovered) => setHoveredId(hovered ? subcat.id : null)}
           isSubcategory
@@ -260,6 +300,7 @@ interface KnowledgeSphereProps {
   activeCategory: Category | null;
   onCategoryClick: (category: Category) => void;
   onSubcategoryClick: (subcategory: Category) => void;
+  onCategoryLongPress?: (category: Category, event: { clientX: number; clientY: number }) => void;
   controlsEnabled?: boolean;
 }
 
@@ -270,6 +311,7 @@ export function KnowledgeSphere({
   activeCategory, 
   onCategoryClick, 
   onSubcategoryClick,
+  onCategoryLongPress,
   controlsEnabled = true
 }: KnowledgeSphereProps) {
   const controlsRef = useRef<any>(null);
@@ -302,6 +344,7 @@ export function KnowledgeSphere({
           activeCategory={activeCategory}
           onCategoryClick={onCategoryClick}
           onSubcategoryClick={onSubcategoryClick}
+          onCategoryLongPress={onCategoryLongPress}
           controlsEnabled={controlsEnabled}
           isMobile={isMobile}
           controlsRef={controlsRef}
