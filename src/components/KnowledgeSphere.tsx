@@ -84,12 +84,29 @@ function InteractiveNode({ position, color, onClick, onLongPress, isHovered, onH
     onHover(false);
   };
 
+  const handlePointerCancel = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+      }
+    };
+  }, []);
+
   return (
     <group position={position}>
       <mesh
         ref={meshRef}
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         onPointerOver={() => onHover(true)}
         onPointerLeave={handlePointerLeave}
       >
