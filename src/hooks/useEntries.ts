@@ -2,6 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Entry } from '@/types/knowledge';
 
+// Validation constants
+const MAX_TITLE_LENGTH = 500;
+const MAX_CONTENT_LENGTH = 100000;
+const MAX_IMAGE_DESCRIPTION_LENGTH = 1000;
+const MAX_TAGS_COUNT = 50;
+
 export function useEntries(userId: string | undefined, categoryId: string | null) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,11 +53,17 @@ export function useEntries(userId: string | undefined, categoryId: string | null
       return { error: uploadError };
     }
 
-    const { data: { publicUrl } } = supabase.storage
+    // Use signed URL instead of public URL for private bucket
+    const { data, error: urlError } = await supabase.storage
       .from('entry-images')
-      .getPublicUrl(filePath);
+      .createSignedUrl(filePath, 3600); // 1 hour expiry
 
-    return { url: publicUrl };
+    if (urlError) {
+      console.error('Error creating signed URL:', urlError);
+      return { error: urlError };
+    }
+
+    return { url: data.signedUrl };
   };
 
   const addEntry = async (
@@ -62,6 +74,21 @@ export function useEntries(userId: string | undefined, categoryId: string | null
     imageDescription?: string
   ) => {
     if (!userId || !categoryId) return { error: new Error('Not authenticated or no category selected') };
+
+    // Client-side validation (defense in depth)
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle || trimmedTitle.length > MAX_TITLE_LENGTH) {
+      return { error: new Error(`Title must be 1-${MAX_TITLE_LENGTH} characters`) };
+    }
+    if (content && content.length > MAX_CONTENT_LENGTH) {
+      return { error: new Error(`Content must be ${MAX_CONTENT_LENGTH.toLocaleString()} characters or less`) };
+    }
+    if (imageDescription && imageDescription.length > MAX_IMAGE_DESCRIPTION_LENGTH) {
+      return { error: new Error(`Image description must be ${MAX_IMAGE_DESCRIPTION_LENGTH} characters or less`) };
+    }
+    if (tags.length > MAX_TAGS_COUNT) {
+      return { error: new Error(`Maximum ${MAX_TAGS_COUNT} tags allowed`) };
+    }
 
     let imageUrl: string | null = null;
     
@@ -76,7 +103,7 @@ export function useEntries(userId: string | undefined, categoryId: string | null
       .insert({
         user_id: userId,
         category_id: categoryId,
-        title,
+        title: trimmedTitle,
         content: content || null,
         tags,
         image_url: imageUrl,
@@ -95,6 +122,24 @@ export function useEntries(userId: string | undefined, categoryId: string | null
   };
 
   const updateEntry = async (id: string, updates: Partial<Entry>) => {
+    // Client-side validation for updates
+    if (updates.title !== undefined) {
+      const trimmedTitle = updates.title.trim();
+      if (!trimmedTitle || trimmedTitle.length > MAX_TITLE_LENGTH) {
+        return { error: new Error(`Title must be 1-${MAX_TITLE_LENGTH} characters`) };
+      }
+      updates.title = trimmedTitle;
+    }
+    if (updates.content !== undefined && updates.content && updates.content.length > MAX_CONTENT_LENGTH) {
+      return { error: new Error(`Content must be ${MAX_CONTENT_LENGTH.toLocaleString()} characters or less`) };
+    }
+    if (updates.image_description !== undefined && updates.image_description && updates.image_description.length > MAX_IMAGE_DESCRIPTION_LENGTH) {
+      return { error: new Error(`Image description must be ${MAX_IMAGE_DESCRIPTION_LENGTH} characters or less`) };
+    }
+    if (updates.tags !== undefined && updates.tags.length > MAX_TAGS_COUNT) {
+      return { error: new Error(`Maximum ${MAX_TAGS_COUNT} tags allowed`) };
+    }
+
     const { data, error } = await supabase
       .from('entries')
       .update(updates)
