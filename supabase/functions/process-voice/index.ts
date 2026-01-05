@@ -22,18 +22,41 @@ serve(async (req) => {
   }
 
   try {
-    const { audio, userId } = await req.json();
+    // Get JWT from Authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    
+    // Create client with user's JWT for authentication
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: { Authorization: authHeader }
+      }
+    });
+
+    // Verify user is authenticated
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error('Auth error:', userError);
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const userId = user.id;
+    const { audio } = await req.json();
     
     if (!audio) {
       return new Response(
         JSON.stringify({ error: 'No audio data provided' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    if (!userId) {
-      return new Response(
-        JSON.stringify({ error: 'Missing userId' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -43,7 +66,7 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    console.log('Processing audio transcription...');
+    console.log('Processing audio transcription for user:', userId);
 
     const audioBuffer = base64ToArrayBuffer(audio);
     
@@ -90,15 +113,10 @@ serve(async (req) => {
       );
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Fetch ALL categories for the user
+    // Fetch ALL categories for the user - RLS will filter automatically
     const { data: allCategories, error: catError } = await supabase
       .from('categories')
-      .select('id, name, color, parent_id')
-      .eq('user_id', userId);
+      .select('id, name, color, parent_id');
 
     if (catError) {
       console.error('Error fetching categories:', catError);

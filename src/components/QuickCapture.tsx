@@ -48,7 +48,7 @@ export function QuickCapture({ userId, onSuccess }: QuickCaptureProps) {
 
     try {
       const { data, error } = await supabase.functions.invoke('process-thought', {
-        body: { thought, userId }
+        body: { thought }
       });
 
       if (error) throw error;
