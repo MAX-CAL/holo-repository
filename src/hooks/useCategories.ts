@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Category } from '@/types/knowledge';
 
+// Validation constants
+const MAX_CATEGORY_NAME_LENGTH = 200;
+
 export function useCategories(userId: string | undefined, parentId: string | null = null) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +61,12 @@ export function useCategories(userId: string | undefined, parentId: string | nul
   const addCategory = async (name: string, color: string, parent_id: string | null = null) => {
     if (!userId) return { error: new Error('Not authenticated') };
     
+    // Client-side validation (defense in depth)
+    const trimmedName = name.trim();
+    if (!trimmedName || trimmedName.length > MAX_CATEGORY_NAME_LENGTH) {
+      return { error: new Error(`Category name must be 1-${MAX_CATEGORY_NAME_LENGTH} characters`) };
+    }
+    
     const position = generateSpherePosition();
     
     const { data, error } = await supabase
@@ -65,7 +74,7 @@ export function useCategories(userId: string | undefined, parentId: string | nul
       .insert({
         user_id: userId,
         parent_id,
-        name,
+        name: trimmedName,
         color,
         position_x: position.x,
         position_y: position.y,
@@ -84,6 +93,15 @@ export function useCategories(userId: string | undefined, parentId: string | nul
   };
 
   const updateCategory = async (id: string, updates: Partial<Category>) => {
+    // Client-side validation for updates
+    if (updates.name !== undefined) {
+      const trimmedName = updates.name.trim();
+      if (!trimmedName || trimmedName.length > MAX_CATEGORY_NAME_LENGTH) {
+        return { error: new Error(`Category name must be 1-${MAX_CATEGORY_NAME_LENGTH} characters`) };
+      }
+      updates.name = trimmedName;
+    }
+
     const { data, error } = await supabase
       .from('categories')
       .update(updates)
