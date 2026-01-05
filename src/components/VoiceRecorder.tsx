@@ -1,15 +1,30 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Loader2, Square } from 'lucide-react';
+import { Mic, Loader2, Square } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-interface VoiceRecorderProps {
-  userId: string;
-  onSuccess?: () => void;
+interface Category {
+  id: string;
+  name: string;
+  color: string;
+  parent_id: string | null;
 }
 
-export function VoiceRecorder({ userId, onSuccess }: VoiceRecorderProps) {
+interface ProcessedNote {
+  title: string;
+  content: string;
+  suggested_category_id: string | null;
+  suggested_category_name: string | null;
+  parent_category_name?: string | null;
+}
+
+interface VoiceRecorderProps {
+  userId: string;
+  onProcessed?: (processed: ProcessedNote, categories: Category[]) => void;
+}
+
+export function VoiceRecorder({ userId, onProcessed }: VoiceRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
@@ -21,7 +36,6 @@ export function VoiceRecorder({ userId, onSuccess }: VoiceRecorderProps) {
 
   useEffect(() => {
     return () => {
-      // Cleanup on unmount
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
@@ -37,7 +51,6 @@ export function VoiceRecorder({ userId, onSuccess }: VoiceRecorderProps) {
     const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
     analyserRef.current.getByteFrequencyData(dataArray);
     
-    // Calculate average level
     const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
     setAudioLevel(average / 255);
     
@@ -58,7 +71,6 @@ export function VoiceRecorder({ userId, onSuccess }: VoiceRecorderProps) {
       
       streamRef.current = stream;
 
-      // Set up audio analyser for visualisation
       const audioContext = new AudioContext();
       const source = audioContext.createMediaStreamSource(stream);
       const analyser = audioContext.createAnalyser();
@@ -66,7 +78,6 @@ export function VoiceRecorder({ userId, onSuccess }: VoiceRecorderProps) {
       source.connect(analyser);
       analyserRef.current = analyser;
 
-      // Set up media recorder
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=opus'
       });
@@ -84,10 +95,9 @@ export function VoiceRecorder({ userId, onSuccess }: VoiceRecorderProps) {
       };
 
       mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start(100); // Collect data every 100ms
+      mediaRecorder.start(100);
       setIsRecording(true);
       
-      // Start audio level monitoring
       animationFrameRef.current = requestAnimationFrame(updateAudioLevel);
       
     } catch (error) {
@@ -124,7 +134,6 @@ export function VoiceRecorder({ userId, onSuccess }: VoiceRecorderProps) {
     try {
       const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
       
-      // Convert to base64
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve, reject) => {
         reader.onloadend = () => {
@@ -137,16 +146,15 @@ export function VoiceRecorder({ userId, onSuccess }: VoiceRecorderProps) {
       
       const base64Audio = await base64Promise;
 
-      // Send to edge function
-      const { data, error } = await supabase.functions.invoke('voice-transcribe', {
+      const { data, error } = await supabase.functions.invoke('process-voice', {
         body: { audio: base64Audio, userId }
       });
 
       if (error) throw error;
 
       if (data.success) {
-        toast.success(`Saved to ${data.category_name} → ${data.subcategory_name}`);
-        onSuccess?.();
+        // Call the callback with processed data instead of saving
+        onProcessed?.(data.processed, data.categories || []);
       } else {
         throw new Error(data.error || 'Failed to process voice note');
       }
@@ -160,7 +168,6 @@ export function VoiceRecorder({ userId, onSuccess }: VoiceRecorderProps) {
 
   return (
     <div className="relative">
-      {/* Recording indicator ring */}
       {isRecording && (
         <div 
           className="absolute inset-0 rounded-full bg-primary/20 animate-pulse"
