@@ -147,7 +147,7 @@ export function VoiceRecorder({ userId, onProcessed }: VoiceRecorderProps) {
       const base64Audio = await base64Promise;
 
       const { data, error } = await supabase.functions.invoke('process-voice', {
-        body: { audio: base64Audio, userId }
+        body: { audio: base64Audio }
       });
 
       if (error) throw error;

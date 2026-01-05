@@ -1,13 +1,13 @@
 project_id = "ikdqvrixphmxwcylklit"
 
 [functions.quick-capture]
-verify_jwt = false
+verify_jwt = true
 
 [functions.voice-transcribe]
-verify_jwt = false
+verify_jwt = true
 
 [functions.process-thought]
-verify_jwt = false
+verify_jwt = true
 
 [functions.process-voice]
-verify_jwt = false
+verify_jwt = true

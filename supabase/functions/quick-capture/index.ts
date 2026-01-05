@@ -12,11 +12,41 @@ serve(async (req) => {
   }
 
   try {
-    const { thought, userId } = await req.json();
-    
-    if (!thought || !userId) {
+    // Get JWT from Authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'Missing thought or userId' }),
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    
+    // Create client with user's JWT for authentication
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: { Authorization: authHeader }
+      }
+    });
+
+    // Verify user is authenticated
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error('Auth error:', userError);
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const userId = user.id;
+    const { thought } = await req.json();
+    
+    if (!thought) {
+      return new Response(
+        JSON.stringify({ error: 'Missing thought' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -26,16 +56,10 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    // Get the Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Fetch user's categories
+    // Fetch user's categories - RLS will filter automatically
     const { data: categories, error: catError } = await supabase
       .from('categories')
       .select('id, name, color')
-      .eq('user_id', userId)
       .is('parent_id', null);
 
     if (catError) {
@@ -149,7 +173,6 @@ Respond ONLY with valid JSON in this exact format:
     const { data: subcats, error: subcatError } = await supabase
       .from('categories')
       .select('id, name')
-      .eq('user_id', userId)
       .eq('parent_id', targetCategoryId);
 
     if (subcatError) throw subcatError;
