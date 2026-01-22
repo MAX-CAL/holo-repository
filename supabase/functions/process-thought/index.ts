@@ -34,9 +34,13 @@ serve(async (req) => {
     // Verify user is authenticated
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
-      console.error('Auth error:', userError);
+      console.error('Auth error:', userError?.message, userError?.status, 'Full error:', JSON.stringify(userError));
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ 
+          error: 'Session expired. Please refresh the page and try again.',
+          code: 'AUTH_ERROR',
+          details: userError?.message
+        }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -178,9 +182,18 @@ Respond ONLY with valid JSON in this exact format:
     );
 
   } catch (error) {
-    console.error('Process thought error:', error);
+    const errorDetails = {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      name: error instanceof Error ? error.name : 'Error',
+      timestamp: new Date().toISOString()
+    };
+    console.error('Process thought error:', JSON.stringify(errorDetails));
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ 
+        error: errorDetails.message,
+        code: 'PROCESSING_ERROR',
+        details: errorDetails
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
