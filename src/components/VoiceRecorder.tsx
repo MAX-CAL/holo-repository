@@ -132,6 +132,15 @@ export function VoiceRecorder({ userId, onProcessed }: VoiceRecorderProps) {
     setIsProcessing(true);
 
     try {
+      // Verify session before calling edge function
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session) {
+        toast.error('Session expired. Please log in again.');
+        setIsProcessing(false);
+        return;
+      }
+
       const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
       
       const reader = new FileReader();
@@ -160,7 +169,19 @@ export function VoiceRecorder({ userId, onProcessed }: VoiceRecorderProps) {
       }
     } catch (error) {
       console.error('Voice processing error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to process voice note');
+      
+      // Specific error messages based on error type
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process voice note';
+      
+      if (errorMessage.includes('401') || errorMessage.includes('Unauthorized') || errorMessage.includes('AUTH_ERROR')) {
+        toast.error('Session expired. Please refresh and try again.');
+      } else if (errorMessage.includes('Rate limit') || errorMessage.includes('429')) {
+        toast.error('Too many requests. Please wait a moment and try again.');
+      } else if (errorMessage.includes('credits') || errorMessage.includes('402')) {
+        toast.error('AI credits exhausted. Please contact support.');
+      } else {
+        toast.error(errorMessage);
+      }
     } finally {
       setIsProcessing(false);
     }
