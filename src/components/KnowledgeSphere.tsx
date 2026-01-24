@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useMemo } from 'react';
+import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Canvas, useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, Sphere } from '@react-three/drei';
 import { damp3 } from 'maath/easing';
@@ -30,9 +30,10 @@ interface NodeProps {
   isHovered: boolean;
   onHover: (hovered: boolean) => void;
   isSubcategory?: boolean;
+  isFocused?: boolean;
 }
 
-function InteractiveNode({ position, color, onClick, onLongPress, isHovered, onHover, isSubcategory = false }: Omit<NodeProps, 'name'>) {
+function InteractiveNode({ position, color, onClick, onLongPress, isHovered, onHover, isSubcategory = false, isFocused = false }: Omit<NodeProps, 'name'>) {
   const meshRef = useRef<THREE.Mesh>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const isLongPress = useRef(false);
@@ -42,7 +43,8 @@ function InteractiveNode({ position, color, onClick, onLongPress, isHovered, onH
   
   useFrame(() => {
     if (meshRef.current) {
-      const scale = isHovered ? 1.4 : 1;
+      // Scale up when hovered or focused
+      const scale = isHovered ? 1.4 : isFocused ? 1.2 : 1;
       meshRef.current.scale.lerp(new THREE.Vector3(scale, scale, scale), 0.1);
     }
   });
@@ -115,6 +117,8 @@ function InteractiveNode({ position, color, onClick, onLongPress, isHovered, onH
           color={color}
           roughness={0.7}
           metalness={0}
+          emissive={isFocused ? color : '#000000'}
+          emissiveIntensity={isFocused ? 0.3 : 0}
         />
       </mesh>
     </group>
@@ -180,6 +184,72 @@ function AnimatedCamera({ targetPosition, targetLookAt, onAnimationComplete }: A
   return null;
 }
 
+// Helper to calculate which node is most facing the camera
+interface CategoryWithPosition extends Category {
+  position_x: number;
+  position_y: number;
+  position_z: number;
+}
+
+function useFocusedNode(
+  nodes: CategoryWithPosition[],
+  onFocusedNodeChange: ((node: Category | null) => void) | undefined
+) {
+  const { camera } = useThree();
+  const lastFocusedId = useRef<string | null>(null);
+  const debounceTimer = useRef<number>(0);
+
+  useFrame(() => {
+    if (nodes.length === 0) {
+      if (lastFocusedId.current !== null) {
+        lastFocusedId.current = null;
+        onFocusedNodeChange?.(null);
+      }
+      return;
+    }
+
+    // Get camera direction (normalized vector pointing from camera toward center)
+    const cameraDirection = new THREE.Vector3();
+    camera.getWorldDirection(cameraDirection);
+
+    let maxDot = -Infinity;
+    let focusedNode: CategoryWithPosition | null = null;
+
+    for (const node of nodes) {
+      // Vector from camera to node
+      const nodePos = new THREE.Vector3(node.position_x, node.position_y, node.position_z);
+      const toNode = nodePos.clone().sub(camera.position).normalize();
+      
+      // Dot product: higher value = more aligned with camera direction
+      const dot = cameraDirection.dot(toNode);
+      
+      if (dot > maxDot) {
+        maxDot = dot;
+        focusedNode = node;
+      }
+    }
+
+    // Only trigger change if the focused node actually changed
+    // Require a minimum alignment threshold (node must be somewhat in front)
+    const MIN_ALIGNMENT = 0.3;
+    
+    if (maxDot >= MIN_ALIGNMENT && focusedNode && focusedNode.id !== lastFocusedId.current) {
+      const now = Date.now();
+      // Debounce: only change focus if enough time has passed
+      if (now - debounceTimer.current > 100) {
+        lastFocusedId.current = focusedNode.id;
+        debounceTimer.current = now;
+        onFocusedNodeChange?.(focusedNode);
+      }
+    } else if (maxDot < MIN_ALIGNMENT && lastFocusedId.current !== null) {
+      lastFocusedId.current = null;
+      onFocusedNodeChange?.(null);
+    }
+  });
+
+  return lastFocusedId.current;
+}
+
 interface SceneContentProps {
   categories: Category[];
   subcategories: Category[];
@@ -188,6 +258,7 @@ interface SceneContentProps {
   onCategoryClick: (category: Category) => void;
   onSubcategoryClick: (subcategory: Category) => void;
   onCategoryLongPress?: (category: Category, event: { clientX: number; clientY: number }) => void;
+  onFocusedNodeChange?: (node: Category | null) => void;
   controlsEnabled: boolean;
   isMobile: boolean;
   controlsRef: React.RefObject<any>;
@@ -201,6 +272,7 @@ function SceneContent({
   onCategoryClick, 
   onSubcategoryClick,
   onCategoryLongPress,
+  onFocusedNodeChange,
   controlsEnabled,
   isMobile,
   controlsRef
@@ -237,6 +309,10 @@ function SceneContent({
       return { ...subcat, position_x: x, position_y: y, position_z: z };
     });
   }, [subcategories]);
+
+  // Track focused node based on current level
+  const currentNodes = level === 'root' ? categoriesWithPositions : subcategoriesWithPositions;
+  const focusedId = useFocusedNode(currentNodes, onFocusedNodeChange);
 
   // Reset OrbitControls when transitioning between levels
   useEffect(() => {
@@ -278,6 +354,7 @@ function SceneContent({
           onLongPress={(e) => onCategoryLongPress?.(category, e)}
           isHovered={hoveredId === category.id}
           onHover={(hovered) => setHoveredId(hovered ? category.id : null)}
+          isFocused={focusedId === category.id}
         />
       ))}
 
@@ -291,6 +368,7 @@ function SceneContent({
           isHovered={hoveredId === subcat.id}
           onHover={(hovered) => setHoveredId(hovered ? subcat.id : null)}
           isSubcategory
+          isFocused={focusedId === subcat.id}
         />
       ))}
 
@@ -318,6 +396,7 @@ interface KnowledgeSphereProps {
   onCategoryClick: (category: Category) => void;
   onSubcategoryClick: (subcategory: Category) => void;
   onCategoryLongPress?: (category: Category, event: { clientX: number; clientY: number }) => void;
+  onFocusedNodeChange?: (node: Category | null) => void;
   controlsEnabled?: boolean;
 }
 
@@ -329,6 +408,7 @@ export function KnowledgeSphere({
   onCategoryClick, 
   onSubcategoryClick,
   onCategoryLongPress,
+  onFocusedNodeChange,
   controlsEnabled = true
 }: KnowledgeSphereProps) {
   const controlsRef = useRef<any>(null);
@@ -362,6 +442,7 @@ export function KnowledgeSphere({
           onCategoryClick={onCategoryClick}
           onSubcategoryClick={onSubcategoryClick}
           onCategoryLongPress={onCategoryLongPress}
+          onFocusedNodeChange={onFocusedNodeChange}
           controlsEnabled={controlsEnabled}
           isMobile={isMobile}
           controlsRef={controlsRef}
