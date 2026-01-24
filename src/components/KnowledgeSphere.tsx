@@ -216,11 +216,25 @@ function useFocusedNode(
     let focusedNode: CategoryWithPosition | null = null;
 
     for (const node of nodes) {
-      // Vector from camera to node
       const nodePos = new THREE.Vector3(node.position_x, node.position_y, node.position_z);
-      const toNode = nodePos.clone().sub(camera.position).normalize();
       
-      // Dot product: higher value = more aligned with camera direction
+      // Check if node is in FRONT of the camera (visible side of the sphere)
+      // Vector from camera to node
+      const cameraToNode = nodePos.clone().sub(camera.position);
+      
+      // If dot product with camera direction is negative, node is behind camera
+      const isBehindCamera = cameraDirection.dot(cameraToNode) < 0;
+      if (isBehindCamera) continue;
+      
+      // Check if node is on the front-facing side of the sphere
+      // Node is visible if its position vector points toward the camera
+      const nodeToCamera = camera.position.clone().sub(nodePos).normalize();
+      const nodeNormal = nodePos.clone().normalize(); // Sphere surface normal at node
+      const isFrontFacing = nodeNormal.dot(nodeToCamera) > 0.1; // Must face camera
+      if (!isFrontFacing) continue;
+      
+      // Now calculate alignment with camera center
+      const toNode = cameraToNode.normalize();
       const dot = cameraDirection.dot(toNode);
       
       if (dot > maxDot) {
@@ -229,19 +243,17 @@ function useFocusedNode(
       }
     }
 
-    // Only trigger change if the focused node actually changed
-    // Require a minimum alignment threshold (node must be somewhat in front)
-    const MIN_ALIGNMENT = 0.3;
+    // Higher threshold since we're now only considering visible nodes
+    const MIN_ALIGNMENT = 0.5;
     
     if (maxDot >= MIN_ALIGNMENT && focusedNode && focusedNode.id !== lastFocusedId.current) {
       const now = Date.now();
-      // Debounce: only change focus if enough time has passed
       if (now - debounceTimer.current > 100) {
         lastFocusedId.current = focusedNode.id;
         debounceTimer.current = now;
         onFocusedNodeChange?.(focusedNode);
       }
-    } else if (maxDot < MIN_ALIGNMENT && lastFocusedId.current !== null) {
+    } else if ((maxDot < MIN_ALIGNMENT || !focusedNode) && lastFocusedId.current !== null) {
       lastFocusedId.current = null;
       onFocusedNodeChange?.(null);
     }

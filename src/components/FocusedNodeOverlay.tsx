@@ -12,24 +12,24 @@ export function FocusedNodeOverlay({ focusedNode, className }: FocusedNodeOverla
   return (
     <div 
       className={cn(
-        "fixed left-1/2 -translate-x-1/2 z-30 pointer-events-none",
+        "absolute right-4 z-10 pointer-events-none",
         "animate-fade-in",
         className
       )}
     >
       <div 
-        className="px-4 py-2 rounded-full backdrop-blur-md bg-background/80 border border-border/30 shadow-lg"
+        className="px-3 py-1.5 rounded-full backdrop-blur-md bg-background/70 border border-border/20 shadow-sm"
       >
         <div className="flex items-center gap-2">
           {/* Color indicator dot */}
           <div 
-            className="w-3 h-3 rounded-full shrink-0"
+            className="w-2.5 h-2.5 rounded-full shrink-0"
             style={{ backgroundColor: focusedNode.color }}
           />
           {/* Node name */}
           <span 
             key={focusedNode.id}
-            className="text-sm font-medium text-foreground whitespace-nowrap animate-fade-in"
+            className="text-xs font-medium text-foreground/80 whitespace-nowrap animate-fade-in"
           >
             {focusedNode.name}
           </span>
