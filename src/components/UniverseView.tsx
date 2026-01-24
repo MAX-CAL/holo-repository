@@ -1,12 +1,14 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { KnowledgeSphere } from './KnowledgeSphere';
 import { AddCategoryDialog } from './AddCategoryDialog';
 import { TopicDetailView } from './TopicDetailView';
 import { Breadcrumbs } from './Breadcrumbs';
 import { QuickCapture } from './QuickCapture';
 import { CategoryContextMenu } from './CategoryContextMenu';
+import { FocusedNodeOverlay } from './FocusedNodeOverlay';
 import { useCategories } from '@/hooks/useCategories';
 import { useAuth } from '@/hooks/useAuth';
+import { useHapticFeedback } from '@/hooks/useHapticFeedback';
 import { Category, NavigationState, ViewLevel } from '@/types/knowledge';
 import { Button } from '@/components/ui/button';
 import { LogOut, Loader2, ArrowLeft } from 'lucide-react';
@@ -24,6 +26,11 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
     category: Category;
     position: { x: number; y: number };
   } | null>(null);
+  
+  // Focused node state for overlay display
+  const [focusedNode, setFocusedNode] = useState<Category | null>(null);
+  const prevFocusedNodeId = useRef<string | null>(null);
+  const { vibrate } = useHapticFeedback({ duration: 50, debounceMs: 150 });
   
   // Navigation state machine
   const [navigation, setNavigation] = useState<NavigationState>({
@@ -112,6 +119,20 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
       position: { x: event.clientX, y: event.clientY }
     });
   }, []);
+
+  // Handle focused node change from KnowledgeSphere
+  const handleFocusedNodeChange = useCallback((node: Category | null) => {
+    // Only trigger haptic if the node actually changed
+    if (node?.id !== prevFocusedNodeId.current) {
+      prevFocusedNodeId.current = node?.id ?? null;
+      setFocusedNode(node);
+      
+      // Trigger haptic feedback when a new node comes into focus
+      if (node) {
+        vibrate();
+      }
+    }
+  }, [vibrate]);
 
   const handleDeleteCategory = async (id: string) => {
     const result = navigation.level === 'root' 
@@ -235,10 +256,19 @@ export function UniverseView({ onLogout }: UniverseViewProps) {
             onCategoryClick={handleCategoryClick}
             onSubcategoryClick={handleSubcategoryClick}
             onCategoryLongPress={handleCategoryContextMenu}
+            onFocusedNodeChange={handleFocusedNodeChange}
             controlsEnabled={!overlayInteracting}
           />
         )}
       </div>
+
+      {/* Focused Node Overlay */}
+      {!isLoading && !showEmptyState && (
+        <FocusedNodeOverlay 
+          focusedNode={focusedNode} 
+          className="top-20 sm:top-[4.5rem]"
+        />
+      )}
 
       {/* Empty state */}
       {showEmptyState && (
